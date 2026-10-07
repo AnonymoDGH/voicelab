@@ -5313,7 +5313,7 @@ dependencies = [
 
 [[package]]
 name = "voicelab-app"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -5329,7 +5329,7 @@ dependencies = [
 
 [[package]]
 name = "voicelab-cli"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -5338,7 +5338,7 @@ dependencies = [
 
 [[package]]
 name = "voicelab-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "audioadapter-buffers",
