@@ -1,11 +1,13 @@
 name: Release
 
-# Push a tag like v0.1.0 (or run it by hand with a version) to build the Windows installer,
-# export the models and publish a GitHub release with everything attached. The app downloads
-# its models from the release matching its version, so the version must match Cargo.toml.
+# Builds the Windows installer, exports the models and publishes a GitHub release with
+# everything attached. Triggers: a tag like v0.1.0, a manual run with a version, or a push whose
+# commit message contains [release] (publishes v<version from Cargo.toml>). The app downloads
+# its models from the release matching its version.
 on:
   push:
     tags: ["v*"]
+    branches: ["**"]
   workflow_dispatch:
     inputs:
       version:
@@ -19,8 +21,27 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  meta:
+    name: Versión
+    if: github.event_name != 'push' || startsWith(github.ref, 'refs/tags/') || contains(github.event.head_commit.message, '[release]')
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then tag="v$INPUT_VERSION"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then tag="$GITHUB_REF_NAME"
+          else tag="v$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"; fi
+          echo "Publicando $tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
   models:
     name: Modelos ONNX
+    needs: meta
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,6 +63,7 @@ jobs:
 
   windows:
     name: Instalador Windows
+    needs: meta
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,7 +99,7 @@ jobs:
 
   publish:
     name: Publicar release
-    needs: [models, windows]
+    needs: [meta, models, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -86,9 +108,9 @@ jobs:
           path: artifacts
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
+          tag_name: ${{ needs.meta.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: VoiceLab ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
+          name: VoiceLab ${{ needs.meta.outputs.tag }}
           body_path: .github/RELEASE_NOTES.md
           files: |
             artifacts/windows/*

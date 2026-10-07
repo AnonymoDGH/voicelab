@@ -152,9 +152,9 @@ voicelab voices
 Requisitos: Rust estable y Node 20 o superior. En Linux también `libasound2-dev` y las
 [dependencias de Tauri](https://v2.tauri.app/start/prerequisites/).
 
-Para publicar una versión basta con crear un tag `vX.Y.Z`: el workflow
-[Release](.github/workflows/release.yml) exporta los modelos, compila el instalador en Windows y
-sube todo al release.
+Para publicar una versión, sube la versión en `Cargo.toml` y crea un tag `vX.Y.Z` (o haz push de un
+commit que contenga `[release]`): el workflow [Release](.github/workflows/release.yml) exporta los
+modelos, compila el instalador en Windows y sube todo al release.
 
 ```sh
 # Motor y CLI
