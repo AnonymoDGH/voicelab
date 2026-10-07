@@ -185,7 +185,7 @@ pub fn list_voices(dirs: &[PathBuf]) -> Vec<Voice> {
         .filter(|p| p.extension().is_some_and(|x| x == EXTENSION))
         .filter_map(|p| Voice::load(p).ok())
         .collect();
-    voices.sort_by_key(|v| v.name.to_lowercase());
+    voices.sort_by_key(|v| slug(&v.name)); // accent-insensitive: Álvaro goes with the A
     voices
 }
 

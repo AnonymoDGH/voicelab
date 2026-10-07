@@ -34,8 +34,16 @@ abierta a Voicemod, en español y sin enviar nada a internet.
   voz con el timbre de otra persona y conserva lo que dices y cómo lo dices.
 - **Clona cualquier voz con 10–20 segundos.** Desde un archivo o grabándote. No hay que entrenar nada.
 - **Funciona en un i5 sin GPU.** Usa un solo hilo de CPU; hay margen de sobra para jugar o emitir.
+- **Modo Ultra a 48 kHz.** Más pasos del modelo y una segunda red que reconstruye los agudos que
+  faltan (de 16 a 48 kHz): sibilantes y aire, lo más parecido a una voz real.
+- **Efectos y tono.** Robot, radio, demonio, ardilla, eco y cueva, encima de la voz IA o de la
+  tuya, y tono de -12 a +12 semitonos. Con **Reducir ruido** (RNNoise) el teclado y el ventilador
+  no llegan al modelo.
+- **16 voces incluidas con retrato**, de licencia libre: 8 del corpus VCTK y 8 donadas por
+  voluntarios (CC0), la mitad con acento hispano.
 - **Sale como un micrófono más.** Con [VB-Cable](https://vb-audio.com/Cable/), cualquier programa la elige como micrófono.
-- **Cambia de voz sin cortar.** Las teclas `1`–`9` eligen voz y `Ctrl+Alt+V` alterna voz IA ↔ tu voz desde cualquier app.
+- **Cambia de voz sin cortar.** `Ctrl+Alt+1`…`9` eligen voz desde cualquier app (`1`–`9` dentro de
+  VoiceLab) y `Ctrl+Alt+V` alterna voz IA ↔ tu voz.
 - **Privado.** Todo corre en tu PC. Cada voz es un archivo `.vlvoice` de 1 KB.
 
 ## Escúchalo
@@ -47,12 +55,13 @@ Una misma frase en español, convertida por el motor de VoiceLab (archivos de 12
 | Entrada | [original.wav](docs/audio/original.wav) (voz sintética generada con [pocket-tts](https://github.com/kyutai-labs/pocket-tts)) |
 | Como **Carlos**, modo Calidad | [convertida-carlos.wav](docs/audio/convertida-carlos.wav) |
 | Como **Lucía**, modo Rápido | [convertida-lucia.wav](docs/audio/convertida-lucia.wav) |
+| Como **Valeria**, modo **Ultra** (48 kHz) | [ultra-valeria.wav](docs/audio/ultra-valeria.wav) |
 
 ## Empezar
 
 1. Instala [VB-Cable](https://vb-audio.com/Cable/) (gratis) y reinicia Windows.
 2. Descarga el instalador de la [última versión](https://github.com/AnonymoDGH/voicelab/releases/latest)
-   y ábrelo. La primera vez descarga los modelos de IA (~700 MB, una sola vez).
+   y ábrelo. La primera vez descarga los modelos de IA (~800 MB, una sola vez).
 3. Elige una voz, o clona la tuya en **Clonar**, y pulsa **EN VIVO**.
 4. En Discord, OBS o tu juego elige **CABLE Output** como micrófono.
 
@@ -99,8 +108,10 @@ de escritorio actual):
 |---|---|---|---|---|
 | **Rápido** | 80 ms | ~225 ms | 20 / 24 ms | 0.25 |
 | **Calidad** | 160 ms | ~305 ms | 18 / 30 ms | 0.12 |
+| **Ultra** (2 hilos) | 160 ms | ~375 ms | 66 / 107 ms | 0.46 |
 
-¹ Algoritmo más margen de búfer. El driver de audio suma unos 10–30 ms.
+¹ Algoritmo más margen de búfer. El driver de audio suma unos 10–30 ms. En los silencios la salida
+descarta el búfer que no ha hecho falta, así que la latencia real baja sola hasta unos 12 ms de margen.
 ² Tiempo de cálculo dividido entre la duración del audio. Por debajo de 1 hay tiempo real; 0.25 deja el 75 % de margen.
 
 En nuestras pruebas, Whisper reconoce igual que en el original el 94–100 % de las palabras del
@@ -114,13 +125,16 @@ voicelab bench
 
 ```mermaid
 flowchart LR
-    mic([Micrófono]) --> rs[Remuestreo a 16 kHz]
+    mic([Micrófono]) --> rn[Reducir ruido<br/>RNNoise]
+    rn --> rs[Remuestreo a 16 kHz]
     rs --> fb[Fbank Kaldi]
     fb --> asr[Fast-U2++<br/>qué dices]
-    asr --> dit[DiT mean-flow<br/>2 pasos · KV-cache]
+    asr --> dit[DiT mean-flow<br/>2 o 4 pasos · KV-cache]
     dit --> voc[Vocos + iSTFT]
     voc --> gate[Puerta de ruido]
-    gate --> cable([VB-Cable<br/>CABLE Output])
+    gate --> bwe[Ultra: AP-BWE<br/>16 → 48 kHz]
+    bwe --> fx[Tono y efectos]
+    fx --> cable([VB-Cable<br/>CABLE Output])
     ref([Audio de referencia<br/>10–20 s]) --> spk[WavLM + ECAPA]
     spk --> print[(Huella de voz<br/>.vlvoice)]
     print --> gtm[Memoria de timbre]
@@ -130,6 +144,10 @@ flowchart LR
 - **Modelo:** [MeanVC2](https://github.com/ASLP-lab/MeanVC2) (Apache-2.0) exportado a ONNX. El DiT
   tiene 18 M parámetros y hace los dos pasos de *mean flow* en un solo grafo con KV-cache de tamaño
   fijo. Corre con ONNX Runtime desde Rust, unas 3 veces más rápido que PyTorch en CPU.
+- **Ultra:** 4 pasos de *mean flow* (PESQ estimado +0,3 frente a 2, misma similitud de voz) y
+  [AP-BWE](https://github.com/yxlu-0102/AP-BWE) (MIT) en int8, que predice el espectro de 8 a
+  24 kHz. Se procesa por bloques con 27 tramas de contexto a cada lado: el resultado es el mismo
+  que con la frase entera, a cambio de 50 ms más de latencia.
 - **Audio:** `cpal` (WASAPI en Windows), buffers sin bloqueos (`rtrb`) y el modelo en su propio
   hilo. Compensa la deriva de reloj entre el micrófono y la salida.
 - **Paridad verificada:** cada grafo ONNX se compara con PyTorch y el motor Rust con la
@@ -141,12 +159,13 @@ flowchart LR
 ## Línea de comandos
 
 ```sh
-voicelab download-models                          # modelos de IA (~700 MB, una vez)
+voicelab download-models                          # modelos de IA (~800 MB, una vez)
 voicelab devices                                  # micrófonos y salidas (marca VB-Cable)
 voicelab bench                                    # ¿llega tu CPU a tiempo real?
 voicelab run --voice carlos                       # micrófono -> voz IA -> VB-Cable
 voicelab run --voice carlos --monitor "Auriculares"
 voicelab convert entrada.wav salida.wav --voice lucia
+voicelab convert entrada.wav salida.wav --voice valeria --variant ultra   # 48 kHz
 voicelab clone-voice referencia.mp3 --name "Mi voz"
 voicelab voices
 ```
@@ -178,9 +197,9 @@ npm run portraits                    # regenera los retratos de las voces inclui
 
 ```sh
 cd tools/export
-uv run python download.py                         # checkpoints de MeanVC2 y WavLM
+uv run python download.py                         # checkpoints de MeanVC2, WavLM y AP-BWE
 uv run python export_onnx.py --out ../../models   # exporta y verifica contra PyTorch
-uv run python quantize.py --models ../../models   # encoder de voz en int8 (1.3 GB -> 386 MB)
+uv run python quantize.py --models ../../models   # encoder de voz y AP-BWE en int8
 uv run python make_golden.py --source voz.wav --target ref.wav
 uv run python make_voices.py
 ```
@@ -207,5 +226,7 @@ nadie, estafar ni engañar. La app pide confirmarlo antes de crear cada voz.
 ## Créditos y licencia
 
 VoiceLab se publica con licencia **Apache-2.0**. Se apoya en MeanVC2 (ASLP-lab), Fast-U2++/WeNet,
-Vocos, WavLM (Microsoft), el corpus VCTK (CSTR, Universidad de Edimburgo) y las tipografías Geist.
+Vocos, WavLM (Microsoft), AP-BWE, RNNoise, el corpus VCTK (CSTR, Universidad de Edimburgo), las
+voces donadas al Unmute Voice Donation Project (Kyutai), las ilustraciones Notionists y las
+tipografías Geist.
 Licencias y atribuciones en [THIRD_PARTY.md](THIRD_PARTY.md) y [NOTICE](NOTICE).

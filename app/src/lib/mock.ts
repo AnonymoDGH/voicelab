@@ -59,7 +59,7 @@ export function mockApi(): Api {
     print: print(id),
     portrait: portrait(id),
     custom_portrait: false,
-  }));
+  })).sort((a, b) => a.name.localeCompare(b.name, "es")); // as the backend lists them
   const userVoice = (id: string, name: string, description: string, source: string): VoiceInfo => ({
     id,
     name,
