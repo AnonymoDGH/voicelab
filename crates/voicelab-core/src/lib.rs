@@ -1,5 +1,6 @@
 //! VoiceLab core: real-time voice conversion on CPU (MeanVC2 on ONNX Runtime).
 
+pub mod audio;
 pub mod audio_file;
 pub mod dsp;
 pub mod engine;

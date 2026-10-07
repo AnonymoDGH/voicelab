@@ -21,6 +21,34 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// Lista micrófonos y salidas de audio (marca VB-Cable)
+    Devices,
+    /// Cambia tu voz en tiempo real: micrófono -> voz IA -> micrófono virtual
+    Run {
+        /// Voz: id/nombre, archivo .vlvoice o audio de referencia
+        #[arg(short, long)]
+        voice: String,
+        /// Micrófono (id o parte del nombre); por defecto el del sistema
+        #[arg(long)]
+        input: Option<String>,
+        /// Salida (por defecto VB-Cable «CABLE Input» si está instalado)
+        #[arg(long)]
+        output: Option<String>,
+        /// Escucharte por estos auriculares (id o parte del nombre)
+        #[arg(long)]
+        monitor: Option<String>,
+        /// 40ms (baja latencia, por defecto) o 120ms (calidad, menos CPU)
+        #[arg(long, default_value = "40ms")]
+        variant: Variant,
+        #[arg(long, default_value_t = 1)]
+        threads: usize,
+        /// Umbral de la puerta de ruido en dBFS (-100 la desactiva)
+        #[arg(long, default_value_t = -50.0, allow_negative_numbers = true)]
+        gate: f32,
+        /// Segundos a ejecutar (0 = hasta Ctrl+C)
+        #[arg(long, default_value_t = 0.0)]
+        seconds: f32,
+    },
     /// Lista las voces disponibles
     Voices,
     /// Convierte un archivo de audio a otra voz (mismo camino que el tiempo real)
@@ -67,6 +95,25 @@ fn main() -> Result<()> {
             .with_context(|| format!("no hay modelos en {} (usa --models o VOICELAB_MODELS)", models_path.display()))
     };
     match cli.cmd {
+        Cmd::Devices => {
+            use voicelab_core::audio::{Direction, VB_CABLE_URL, devices};
+            for (title, dir) in [("Micrófonos", Direction::Input), ("Salidas", Direction::Output)] {
+                println!("{title}:");
+                for d in devices::list(dir) {
+                    let tags = [(d.is_default, " [por defecto]"), (d.is_virtual_cable, " [micrófono virtual]")];
+                    let tags: String = tags.iter().filter(|t| t.0).map(|t| t.1).collect();
+                    println!("  {}{tags}\n    id: {}", d.name, d.id);
+                }
+            }
+            if voicelab_core::audio::find_virtual_cable().is_none() {
+                println!("\nNo se encontró VB-Cable. Instálalo para usar la voz en Discord/OBS: {VB_CABLE_URL}");
+            }
+        }
+        Cmd::Run { voice, input, output, monitor, variant, threads, gate, seconds } => {
+            let models = models()?;
+            let v = resolve_voice(&models, &voice)?;
+            run_live(&models, &v, input, output, monitor, variant, threads, gate, seconds)?;
+        }
         Cmd::Voices => {
             let voices = voice::list_voices(&paths::voice_dirs());
             if voices.is_empty() {
@@ -107,6 +154,72 @@ fn main() -> Result<()> {
             println!("Voz «{}» guardada en {}", v.name, path.display());
         }
     }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_live(
+    models: &ModelDir,
+    voice: &Voice,
+    input: Option<String>,
+    output: Option<String>,
+    monitor: Option<String>,
+    variant: Variant,
+    threads: usize,
+    gate: f32,
+    seconds: f32,
+) -> Result<()> {
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+    use voicelab_core::audio::{Controls, LiveConfig, LiveEngine, VB_CABLE_URL};
+
+    let controls = Arc::new(Controls::default());
+    controls.gate_db.store(gate);
+    controls.monitor.store(monitor.is_some(), Ordering::Relaxed);
+    let cfg = LiveConfig { input, output, monitor, variant: Some(variant), threads };
+    let engine = LiveEngine::start(models, cfg, &voice.embedding, controls)?;
+    let info = engine.info();
+    println!("Voz «{}» | {} -> {}", voice.name, info.input, info.output);
+    if let Some(m) = &info.monitor {
+        println!("Monitor: {m}");
+    }
+    if !info.output_is_virtual_cable {
+        println!(
+            "Aviso: la salida no es un micrófono virtual. Instala VB-Cable ({VB_CABLE_URL}) para usarla en Discord/OBS."
+        );
+    }
+    println!(
+        "Bloque {:.0} ms, latencia estimada ~{:.0} ms + búferes del sistema. Ctrl+C para salir.",
+        info.block_ms, info.latency_ms
+    );
+    let t0 = Instant::now();
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        let s = engine.stats();
+        let db = |p: f32| 20.0 * p.max(1e-5).log10();
+        println!(
+            "entrada {:>6.1} dB | salida {:>6.1} dB | proceso {:>5.1} ms (pico {:>5.1}, carga {:>3.0}%) | búfer {:>4.0} ms | cortes {} | desbordes {}{}",
+            db(s.input_peak),
+            db(s.output_peak),
+            s.process_ms,
+            s.process_ms_peak,
+            s.load * 100.0,
+            s.output_buffer_ms,
+            s.underruns,
+            s.overruns,
+            if s.gate_open { "" } else { " | puerta cerrada" }
+        );
+        if let Some(e) = engine.last_error() {
+            eprintln!("{e}");
+        }
+        if !engine.is_running() {
+            bail!("el motor se detuvo: {}", engine.last_error().unwrap_or_default());
+        }
+        if seconds > 0.0 && t0.elapsed().as_secs_f32() >= seconds {
+            break;
+        }
+    }
+    engine.stop();
     Ok(())
 }
 

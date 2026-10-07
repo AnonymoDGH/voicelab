@@ -1,6 +1,8 @@
 pub mod fbank;
+pub mod gate;
 pub mod istft;
 pub mod resample;
+pub mod stream_resample;
 
 /// `F.interpolate(x, size, mode="linear", align_corners=True)` along time.
 /// `x` is `[len, dim]` row-major; returns `[size, dim]`.
