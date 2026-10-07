@@ -132,7 +132,10 @@ class WavLMHiddenStates(nn.Module):
     def forward(self, wav: torch.Tensor) -> torch.Tensor:
         # wav: [1, N] at 16 kHz -> [25, 1, T, 1024]
         if self.model.cfg.normalize:
-            wav = F.layer_norm(wav, wav.shape[-1:])
+            # == F.layer_norm(wav, wav.shape[-1:]), written out so the length stays dynamic in ONNX
+            mean = wav.mean(dim=-1, keepdim=True)
+            var = (wav - mean).pow(2).mean(dim=-1, keepdim=True)
+            wav = (wav - mean) / torch.sqrt(var + 1e-5)
         m = self.model
         features = m.feature_extractor(wav).transpose(1, 2)
         features = m.layer_norm(features)

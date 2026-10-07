@@ -1,0 +1,18 @@
+VoiceLab
+Copyright 2026 VoiceLab contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It builds on the following third-party work (details and licenses in THIRD_PARTY.md):
+
+- MeanVC2 (ASLP-lab, Northwestern Polytechnical University) — streaming zero-shot
+  voice conversion model and runtime reference. Apache License 2.0.
+- Fast-U2++ / WeNet — streaming ASR encoder used for content features. Apache License 2.0.
+- Vocos (Charactr) — neural vocoder. MIT License.
+- WavLM (Microsoft) and the ECAPA-TDNN speaker verification head from UniSpeech.
+  MIT License, Copyright (c) Microsoft Corporation.
+- VCTK Corpus (Centre for Speech Technology Research, University of Edinburgh),
+  clips distributed via kyutai/tts-voices — reference audio for the built-in voices.
+  Creative Commons Attribution 4.0 International.
+- Geist and Geist Mono typefaces (Vercel). SIL Open Font License 1.1.
+- Design inspiration for a CPU-first, voice-state-file workflow: pocket-tts (Kyutai), MIT License.
