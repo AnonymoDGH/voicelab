@@ -1,7 +1,9 @@
 // Bridge to the Rust backend. Outside Tauri (plain browser) a mock backend is used so the UI
 // can be previewed and tested without audio hardware or models.
 
-export type Variant = "120ms" | "40ms";
+export type Variant = "120ms" | "40ms" | "ultra";
+
+export type Effect = "none" | "robot" | "radio" | "demon" | "chipmunk" | "echo" | "cave";
 
 export interface Settings {
   input: string | null;
@@ -16,6 +18,13 @@ export interface Settings {
   output_gain: number;
   hotkey: string;
   theme: string;
+  /** Noise suppression on the microphone. */
+  denoise: boolean;
+  effect: Effect;
+  /** Pitch shift in semitones. */
+  pitch: number;
+  /** Ctrl+Alt+1..9 pick a voice from any app. */
+  voice_hotkeys: boolean;
 }
 
 export interface Device {
@@ -109,6 +118,8 @@ export interface Api {
   pickAudioFile(): Promise<string | null>;
   openUrl(url: string): Promise<void>;
   onEnabledChanged(cb: (enabled: boolean) => void): Promise<() => void>;
+  /** A global voice hotkey switched the voice. */
+  onVoiceChanged(cb: (id: string) => void): Promise<() => void>;
 }
 
 const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -146,6 +157,7 @@ async function tauriApi(): Promise<Api> {
     },
     openUrl: (url) => opener.openUrl(url),
     onEnabledChanged: (cb) => listen<boolean>("enabled-changed", (e) => cb(e.payload)),
+    onVoiceChanged: (cb) => listen<string>("voice-changed", (e) => cb(e.payload)),
   };
 }
 

@@ -46,6 +46,9 @@ fn apply_controls(c: &Controls, s: &Settings) {
     c.input_gain.store(s.input_gain);
     c.output_gain.store(s.output_gain);
     c.monitor.store(s.monitor_enabled, Ordering::Relaxed);
+    c.denoise.store(s.denoise, Ordering::Relaxed);
+    c.set_effect(s.effect);
+    c.pitch.store(s.pitch);
 }
 
 fn open_models() -> Option<ModelDir> {
@@ -191,6 +194,10 @@ fn stop_engine(state: State<'_, AppState>) {
 
 #[tauri::command]
 fn set_voice(state: State<'_, AppState>, id: String) -> CmdResult<()> {
+    switch_voice(&state, id)
+}
+
+fn switch_voice(state: &AppState, id: String) -> CmdResult<()> {
     let voice = find_voice(&id)?;
     let mut inner = state.lock();
     if let Some(engine) = &inner.engine {
@@ -199,6 +206,12 @@ fn set_voice(state: State<'_, AppState>, id: String) -> CmdResult<()> {
     inner.settings.voice = Some(id);
     inner.settings.save();
     Ok(())
+}
+
+/// Voices in the order the UI numbers them: your own first, then the included ones.
+fn slot_order() -> Vec<VoiceDto> {
+    let (mine, builtin): (Vec<_>, Vec<_>) = voices().into_iter().partition(|v| !v.builtin);
+    mine.into_iter().chain(builtin).collect()
 }
 
 #[tauri::command]
@@ -231,12 +244,12 @@ async fn update_settings(app: AppHandle, settings: Settings) -> CmdResult<()> {
             || old.monitor != settings.monitor
             || old.variant != settings.variant
             || old.threads != settings.threads;
-        let hotkey_changed = old.hotkey != settings.hotkey;
+        let hotkey_changed = old.hotkey != settings.hotkey || old.voice_hotkeys != settings.voice_hotkeys;
         apply_controls(&state.controls, &settings);
         settings.save();
         inner.settings = settings.clone();
         if hotkey_changed {
-            register_hotkey(&app, &settings.hotkey);
+            register_hotkeys(&app, &settings);
         }
         needs_restart && inner.engine.is_some()
     };
@@ -351,10 +364,10 @@ async fn download_models(app: AppHandle) -> CmdResult<()> {
     .map_err(err)?
 }
 
-fn register_hotkey(app: &AppHandle, hotkey: &str) {
+fn register_hotkeys(app: &AppHandle, settings: &Settings) {
     let gs = app.global_shortcut();
     let _ = gs.unregister_all();
-    let _ = gs.on_shortcut(hotkey, |app, _shortcut, event| {
+    let _ = gs.on_shortcut(settings.hotkey.as_str(), |app, _shortcut, event| {
         if event.state() == ShortcutState::Pressed {
             let c = &app.state::<AppState>().controls;
             let enabled = !c.enabled.load(Ordering::Relaxed);
@@ -362,13 +375,27 @@ fn register_hotkey(app: &AppHandle, hotkey: &str) {
             let _ = app.emit("enabled-changed", enabled);
         }
     });
+    if settings.voice_hotkeys {
+        for n in 1..=9usize {
+            let _ = gs.on_shortcut(format!("CommandOrControl+Alt+{n}").as_str(), move |app, _shortcut, event| {
+                if event.state() != ShortcutState::Pressed {
+                    return;
+                }
+                if let Some(v) = slot_order().into_iter().nth(n - 1)
+                    && switch_voice(&app.state::<AppState>(), v.id.clone()).is_ok()
+                {
+                    let _ = app.emit("voice-changed", v.id);
+                }
+            });
+        }
+    }
 }
 
 pub fn run() {
     let settings = Settings::load();
     let controls = Arc::new(Controls::default());
     apply_controls(&controls, &settings);
-    let hotkey = settings.hotkey.clone();
+    let hotkey_settings = settings.clone();
     let state = AppState { inner: Mutex::new(Inner { settings, engine: None, models: open_models() }), controls };
 
     tauri::Builder::default()
@@ -377,7 +404,7 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(state)
         .setup(move |app| {
-            register_hotkey(app.handle(), &hotkey);
+            register_hotkeys(app.handle(), &hotkey_settings);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

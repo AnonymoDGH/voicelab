@@ -53,6 +53,10 @@ export function mockApi(): Api {
     output_gain: 1,
     hotkey: "CommandOrControl+Alt+V",
     theme: params.get("theme") ?? "estudio",
+    denoise: true,
+    effect: "none",
+    pitch: 0,
+    voice_hotkeys: true,
   };
   let running = false;
   let enabled = true;
@@ -89,7 +93,7 @@ export function mockApi(): Api {
     input_rate: 48000,
     output_rate: 48000,
     block_ms: settings.variant === "40ms" ? 80 : 160,
-    latency_ms: settings.variant === "40ms" ? 225 : 305,
+    latency_ms: { "40ms": 225, "120ms": 305, ultra: 375 }[settings.variant],
   });
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -110,7 +114,7 @@ export function mockApi(): Api {
               process_ms: 19 + 3 * Math.sin(t),
               process_ms_peak: 24,
               block_ms: settings.variant === "40ms" ? 80 : 160,
-              load: settings.variant === "40ms" ? 0.3 : 0.18,
+              load: { "40ms": 0.3, "120ms": 0.18, ultra: 0.46 }[settings.variant],
               output_buffer_ms: 70,
               gate_open: speech > 0.05,
               input_silent: params.get("mic") === "silent",
@@ -172,5 +176,6 @@ export function mockApi(): Api {
     pickAudioFile: async () => "C:\\Users\\tu\\Música\\mi_referencia.wav",
     openUrl: async (url) => void window.open(url, "_blank"),
     onEnabledChanged: async () => () => {},
+    onVoiceChanged: async () => () => {},
   };
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  // A latching console key: lamp + label, lit when on.
   let {
     label,
     hint = "",
@@ -8,70 +9,62 @@
   }: { label: string; hint?: string; checked: boolean; disabled?: boolean; onchange: (v: boolean) => void } = $props();
 </script>
 
-<button class="row" role="switch" aria-checked={checked} {disabled} onclick={() => onchange(!checked)}>
-  <span class="text">
-    <span class="name">{label}</span>
-    {#if hint}<span class="hint">{hint}</span>{/if}
-  </span>
-  <span class="track" class:on={checked}><span class="knob"></span></span>
+<button class="key" class:on={checked} role="switch" aria-checked={checked} {disabled} onclick={() => onchange(!checked)}>
+  <span class="lamp"></span>
+  <span class="name">{label}</span>
+  {#if hint}<span class="hint">{hint}</span>{/if}
 </button>
 
 <style>
-  .row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    width: 100%;
-    padding: 8px 12px;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: var(--r);
-    text-align: left;
-  }
-  .row:hover:not(:disabled) {
-    background: var(--surface-2);
-    border-color: transparent;
-  }
-  .text {
+  .key {
     display: grid;
-    gap: 1px;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    align-content: center;
+    column-gap: 8px;
+    row-gap: 2px;
+    min-height: 46px;
+    padding: 8px 10px;
+    text-align: left;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
   }
-  .name {
-    font-weight: 500;
+  .key:hover:not(:disabled) {
+    border-color: var(--line-strong);
   }
-  .hint {
-    font-family: var(--mono);
-    font-size: 10.5px;
-    color: var(--text-3);
-    letter-spacing: 0.02em;
-  }
-  .track {
-    flex: none;
-    width: 36px;
-    height: 20px;
-    border-radius: 20px;
+  .lamp {
+    grid-row: 1 / 3;
+    align-self: center;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
     background: var(--meter-off);
     border: 1px solid var(--line-strong);
-    position: relative;
-    transition: background 0.18s, border-color 0.18s;
+    transition: background 0.15s, box-shadow 0.15s;
   }
-  .knob {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: var(--text-2);
-    transition: transform 0.18s, background 0.18s;
+  .name {
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 1.2;
   }
-  .track.on {
+  .hint {
+    grid-column: 2;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    color: var(--text-3);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .key.on {
+    border-color: var(--signal-line);
+    background: var(--signal-soft);
+  }
+  .key.on .lamp {
     background: var(--signal);
     border-color: var(--signal);
-  }
-  .track.on .knob {
-    transform: translateX(16px);
-    background: var(--signal-ink);
+    box-shadow: 0 0 8px var(--signal);
   }
 </style>

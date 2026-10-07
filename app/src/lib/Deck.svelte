@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { LiveInfo, LiveStatus, Settings, VoiceInfo } from "./api";
+  import type { Effect, LiveInfo, LiveStatus, Settings, VoiceInfo } from "./api";
+  import FxPanel from "./FxPanel.svelte";
   import LedMeter from "./LedMeter.svelte";
   import Switch from "./Switch.svelte";
   import VoicePrint from "./VoicePrint.svelte";
@@ -15,6 +16,9 @@
     onEnabled,
     onMonitor,
     onMuted,
+    onDenoise,
+    onEffect,
+    onPitch,
   }: {
     running: boolean;
     starting: boolean;
@@ -26,7 +30,12 @@
     onEnabled: (v: boolean) => void;
     onMonitor: (v: boolean) => void;
     onMuted: (v: boolean) => void;
+    onDenoise: (v: boolean) => void;
+    onEffect: (e: Effect) => void;
+    onPitch: (semitones: number, commit: boolean) => void;
   } = $props();
+
+  const modeName = { "40ms": "Rápido", "120ms": "Calidad", ultra: "Ultra" };
 
   const enabled = $derived(live?.enabled ?? true);
   const muted = $derived(live?.muted ?? false);
@@ -78,7 +87,7 @@
       </div>
       <div>
         <span class="label">Modo</span>
-        <span class="value">{settings.variant === "40ms" ? "Rápido" : "Calidad"}</span>
+        <span class="value">{modeName[settings.variant]}</span>
       </div>
     </div>
   </div>
@@ -104,9 +113,12 @@
 
   <div class="switches">
     <Switch label="Voz IA" hint={hotkey} checked={enabled} disabled={!running} onchange={onEnabled} />
-    <Switch label="Escucharme" hint="por tus auriculares" checked={settings.monitor_enabled} onchange={onMonitor} />
-    <Switch label="Silenciar salida" checked={muted} disabled={!running} onchange={onMuted} />
+    <Switch label="Escucharme" hint="auriculares" checked={settings.monitor_enabled} onchange={onMonitor} />
+    <Switch label="Silenciar" hint="nadie te oye" checked={muted} disabled={!running} onchange={onMuted} />
+    <Switch label="Reducir ruido" hint="de fondo" checked={settings.denoise} onchange={onDenoise} />
   </div>
+
+  <FxPanel effect={settings.effect} pitch={settings.pitch} {onEffect} {onPitch} />
 </aside>
 
 <style>
@@ -299,7 +311,7 @@
   }
   .switches {
     display: grid;
-    gap: 2px;
-    margin: 0 -4px;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
   }
 </style>
