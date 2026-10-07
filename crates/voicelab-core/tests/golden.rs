@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use safetensors::SafeTensors;
 use voicelab_core::dsp::fbank::{Fbank, dense_banks};
 use voicelab_core::dsp::istft::Istft;
+use voicelab_core::engine::Bwe;
 use voicelab_core::engine::vc::{StreamingVc, Trace};
 use voicelab_core::{ModelDir, SpeakerEncoder, Variant};
 
@@ -107,6 +108,36 @@ fn pipeline_quality_matches_reference() {
 #[test]
 fn pipeline_low_latency_matches_reference() {
     pipeline(Variant::LowLatency, "golden_40ms.safetensors");
+}
+
+#[test]
+fn pipeline_ultra_matches_reference() {
+    pipeline(Variant::Ultra, "golden_ultra.safetensors");
+}
+
+/// Streaming bandwidth extension equals the full-utterance reference once past the stream start
+/// (zero-padded here, reflected there), whatever the chunk size.
+#[test]
+fn bwe_streaming_matches_reference() {
+    let Some(models) = models() else { return };
+    let f = Fixture::load("bwe.safetensors");
+    let (x, want) = (f.f32("x48"), f.f32("y48"));
+    for chunk in [7680usize, 480, 1000] {
+        let mut bwe = Bwe::new(&models, 2).unwrap();
+        let mut out = Vec::new();
+        for c in x.chunks(chunk) {
+            bwe.process(c, &mut out).unwrap();
+        }
+        bwe.process(&vec![0.0; bwe.latency_samples() + 80], &mut out).unwrap(); // flush
+        assert!(out.len() >= want.len(), "chunk {chunk}: {} < {}", out.len(), want.len());
+        let skip = 4800; // the first 100 ms see different padding
+        // Phase of near-silent bins is numerically arbitrary (f32 here, f64 there), so compare
+        // by SNR rather than sample by sample.
+        let diff: Vec<f32> = out[skip..want.len()].iter().zip(&want[skip..]).map(|(a, b)| a - b).collect();
+        let snr = 20.0 * (rms(&want[skip..]) / rms(&diff).max(1e-12)).log10();
+        eprintln!("bwe chunk {chunk}: SNR {snr:.1} dB, max abs err {:.2e}", max_abs(&diff, &vec![0.0; diff.len()]));
+        assert!(snr > 30.0, "bwe diverges: SNR {snr} dB");
+    }
 }
 
 #[test]

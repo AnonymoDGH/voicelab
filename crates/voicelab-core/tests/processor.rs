@@ -57,7 +57,7 @@ fn converts_at_device_rates_with_gate_bypass_and_mute() {
     let new = |controls: &Arc<Controls>| {
         let mut vc = StreamingVc::new(&models, Variant::LowLatency, 1).unwrap();
         vc.set_speaker(&voice.embedding).unwrap();
-        Processor::new(vc, 48000, &[48000, 44100], controls.clone(), stats.clone()).unwrap()
+        Processor::new(vc, None, 48000, &[48000, 44100], controls.clone(), stats.clone()).unwrap()
     };
 
     // Converted output on two sinks at their own rates, roughly as long as the input.

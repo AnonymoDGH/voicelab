@@ -16,6 +16,9 @@ pub enum Variant {
     /// 40 ms chunks + 40 ms lookahead: lower algorithmic latency, ~2x CPU.
     #[serde(rename = "40ms")]
     LowLatency,
+    /// Quality with 4 mean-flow steps instead of 2, then AP-BWE up to 48 kHz.
+    #[serde(rename = "ultra")]
+    Ultra,
 }
 
 impl Variant {
@@ -23,7 +26,13 @@ impl Variant {
         match self {
             Variant::Quality => "120ms",
             Variant::LowLatency => "40ms",
+            Variant::Ultra => "ultra",
         }
+    }
+
+    /// Ultra adds the 48 kHz bandwidth extension after the 16 kHz conversion.
+    pub fn uses_bwe(self) -> bool {
+        self == Variant::Ultra
     }
 }
 
@@ -33,7 +42,8 @@ impl std::str::FromStr for Variant {
         match s {
             "120ms" | "quality" | "calidad" => Ok(Variant::Quality),
             "40ms" | "low-latency" | "baja-latencia" => Ok(Variant::LowLatency),
-            _ => bail!("unknown variant '{s}' (use 120ms or 40ms)"),
+            "ultra" => Ok(Variant::Ultra),
+            _ => bail!("unknown variant '{s}' (use 120ms, 40ms or ultra)"),
         }
     }
 }
@@ -62,6 +72,17 @@ pub struct VocoderSpec {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct BweSpec {
+    pub file: String,
+    pub sample_rate: u32,
+    pub n_fft: usize,
+    pub hop: usize,
+    pub win: usize,
+    pub log_floor: f32,
+    pub context_frames: usize,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct SpeakerSpec {
     pub file: String,
 }
@@ -79,6 +100,9 @@ pub struct Manifest {
     pub variants: BTreeMap<String, VariantSpec>,
     pub vocoder: VocoderSpec,
     pub speaker: SpeakerSpec,
+    /// Absent in model sets from before Ultra mode.
+    #[serde(default)]
+    pub bwe: Option<BweSpec>,
     pub files: BTreeMap<String, FileEntry>,
 }
 
@@ -99,6 +123,11 @@ impl ModelDir {
             bail!("unsupported model manifest format {}", manifest.format);
         }
         Ok(Self { root, manifest })
+    }
+
+    /// Whether this model set can run `v` (older downloads lack the Ultra graphs).
+    pub fn supports(&self, v: Variant) -> bool {
+        self.manifest.variants.contains_key(v.key()) && (!v.uses_bwe() || self.manifest.bwe.is_some())
     }
 
     pub fn variant(&self, v: Variant) -> Result<&VariantSpec> {

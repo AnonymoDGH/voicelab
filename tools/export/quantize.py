@@ -2,9 +2,12 @@
 
     uv run python quantize.py --models ../../models [--only dit_120ms.onnx ...]
 
-By default only the speaker encoder is quantized: 1.3 GB -> 386 MB with embedding cosine
->= 0.998 vs fp32. The streaming graphs stay fp32 — they already run at RTF ~0.1 on one core
-and int8 Vocos measurably lowered speaker similarity (bench_onnx.py).
+By default the speaker encoder and the Ultra bandwidth extension are quantized:
+- speaker encoder 1.3 GB -> 386 MB, embedding cosine >= 0.998 vs fp32;
+- AP-BWE 119 MB -> 41 MB and 2.7x faster; the voice band stays 34 dB SNR from fp32 (closer than
+  fp32 is to its own input), the generated band above 8 kHz differs in fine detail only.
+The other streaming graphs stay fp32 — they already run at RTF ~0.1 on one core and int8 Vocos
+measurably lowered speaker similarity (bench_onnx.py).
 """
 
 from __future__ import annotations
@@ -23,7 +26,7 @@ from export_onnx import sha256
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", default="../../models")
-    ap.add_argument("--only", nargs="*", default=["spk_encoder.onnx"])
+    ap.add_argument("--only", nargs="*", default=["spk_encoder.onnx", "bwe_16k_48k.onnx"])
     args = ap.parse_args()
     models = Path(args.models)
     manifest = json.loads((models / "manifest.json").read_text())
@@ -42,8 +45,9 @@ def main() -> None:
             pre.unlink()
         manifest["files"][dst.name] = {"sha256": sha256(dst), "bytes": dst.stat().st_size}
         print(f"[int8] {dst.name} {dst.stat().st_size / 1e6:.1f} MB (from {src.stat().st_size / 1e6:.1f} MB)")
-        if name == manifest.get("speaker", {}).get("file"):
-            manifest["speaker"]["file"] = dst.name
+        for part in ("speaker", "bwe"):
+            if name == manifest.get(part, {}).get("file"):
+                manifest[part]["file"] = dst.name
     (models / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
 

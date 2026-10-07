@@ -27,8 +27,9 @@ def _rotate_half(x: torch.Tensor) -> torch.Tensor:
 
 
 class DiTStep(nn.Module):
-    def __init__(self, dit, chunk_size: int, block_size: int):
+    def __init__(self, dit, chunk_size: int, block_size: int, steps: int = ODE_STEPS):
         super().__init__()
+        self.steps = steps
         for m in dit.modules():
             if hasattr(m, "native_rms_norm"):
                 m.native_rms_norm = False  # aten::rms_norm has no ONNX symbolic in opset 17
@@ -53,10 +54,10 @@ class DiTStep(nn.Module):
         self.register_buffer("cos_k", freqs.cos(), persistent=False)
         self.register_buffer("sin_k", freqs.sin(), persistent=False)
 
-        dt = 1.0 / ODE_STEPS
+        dt = 1.0 / steps
         with torch.no_grad():
             t_embs = []
-            for i in range(ODE_STEPS):
+            for i in range(steps):
                 t = 1.0 - i * dt
                 r = max(0.0, t - dt)
                 t_embs.append(dit.t_time_embed(torch.full((1,), t)) + dit.r_time_embed(torch.full((1,), r)))
@@ -106,9 +107,9 @@ class DiTStep(nn.Module):
 
         timbre = dit.temporal_timbre(cond, k_mem, v_mem)
         spks = spk.unsqueeze(1).expand(-1, cond.shape[1], -1)
-        dt = 1.0 / ODE_STEPS
+        dt = 1.0 / self.steps
         new_kv = kv
-        for s in range(ODE_STEPS):
+        for s in range(self.steps):
             t_emb = self.t_embs[s]
             h = dit.input_embed(x, timbre, spks)
             layer_kv = []
@@ -123,6 +124,30 @@ class DiTStep(nn.Module):
             x = x - dt * u
             new_kv = torch.stack(layer_kv)
         return x[:, :self.chunk, :], new_kv
+
+
+class Bwe(nn.Module):
+    """AP-BWE generator without its final atan2: returns the 48 kHz log magnitude and the
+    unnormalized phase vector (re, im), so the engine builds the spectrum as
+    exp(log_amp) * (re, im) / |(re, im)| (same as cos/sin of the angle, no atan2 in the graph).
+    Inputs/outputs are [1, 513, frames] (n_fft 1024, hop 80, win 320 at 48 kHz)."""
+
+    def __init__(self, model):
+        super().__init__()
+        self.m = model
+
+    def forward(self, log_amp, pha):
+        m = self.m
+        x_mag = m.norm_pre_mag(m.conv_pre_mag(log_amp).transpose(1, 2)).transpose(1, 2)
+        x_pha = m.norm_pre_pha(m.conv_pre_pha(pha).transpose(1, 2)).transpose(1, 2)
+        for block_mag, block_pha in zip(m.convnext_mag, m.convnext_pha):
+            x_mag = x_mag + x_pha
+            x_pha = x_pha + x_mag
+            x_mag = block_mag(x_mag)
+            x_pha = block_pha(x_pha)
+        mag = log_amp + m.linear_post_mag(m.norm_post_mag(x_mag.transpose(1, 2))).transpose(1, 2)
+        x_pha = m.norm_post_pha(x_pha.transpose(1, 2))
+        return mag, m.linear_post_pha_r(x_pha).transpose(1, 2), m.linear_post_pha_i(x_pha).transpose(1, 2)
 
 
 class GTM(nn.Module):

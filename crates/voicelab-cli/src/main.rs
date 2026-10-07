@@ -5,7 +5,9 @@ use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
+use voicelab_core::dsp::stream_resample::StreamResampler;
 use voicelab_core::engine::vc::{BLOCK, SAMPLE_RATE};
+use voicelab_core::engine::{Bwe, bwe};
 use voicelab_core::voice::{self, Voice};
 use voicelab_core::{ModelDir, SpeakerEncoder, StreamingVc, Variant, audio_file, paths};
 
@@ -146,9 +148,14 @@ fn main() -> Result<()> {
             let mut vc = StreamingVc::new(&models, variant, threads)?;
             vc.set_speaker(&v.embedding)?;
             let t0 = Instant::now();
-            let out = vc.convert_clip(&wav)?;
+            let mut out = vc.convert_clip(&wav)?;
+            let mut rate = SAMPLE_RATE;
+            if variant.uses_bwe() {
+                out = Bwe::new(&models, threads)?.extend_clip(&out)?;
+                rate = bwe::OUTPUT_RATE;
+            }
             let secs = wav.len() as f32 / SAMPLE_RATE as f32;
-            audio_file::write_wav(&output, &out, SAMPLE_RATE)?;
+            audio_file::write_wav(&output, &out, rate)?;
             println!(
                 "{} -> {} con la voz «{}» ({:?}): {secs:.1} s de audio en {:.2} s (RTF {:.3})",
                 input.display(),
@@ -275,19 +282,38 @@ fn bench(models: &ModelDir, input: Option<&Path>, seconds: f32, threads: usize) 
     }
     let ms = |samples: usize| samples as f32 * 1000.0 / SAMPLE_RATE as f32;
     println!("{threads} hilo(s), {:.1} s de audio", ms(wav.len()) / 1000.0);
-    for variant in [Variant::Quality, Variant::LowLatency] {
+    for variant in [Variant::Quality, Variant::LowLatency, Variant::Ultra] {
+        if !models.supports(variant) {
+            continue;
+        }
         let mut vc = StreamingVc::new(models, variant, threads)?;
         vc.set_speaker(&[0.05f32; voicelab_core::engine::vc::SPK_DIM])?;
+        // Ultra: the 16 kHz output goes on through the resampler and the bandwidth extension.
+        let mut ultra = match variant.uses_bwe() {
+            true => Some((StreamResampler::new(SAMPLE_RATE, bwe::OUTPUT_RATE)?, Bwe::new(models, threads)?)),
+            false => None,
+        };
         let block = vc.block_samples();
+        let (mut x48, mut y48) = (Vec::new(), Vec::new());
+        let mut step = |vc: &mut StreamingVc, chunk: &[f32]| -> Result<()> {
+            let out = vc.process(chunk)?;
+            if let Some((up, bwe)) = &mut ultra {
+                x48.clear();
+                up.push(&out, &mut x48);
+                y48.clear();
+                bwe.process(&x48, &mut y48)?;
+            }
+            Ok(())
+        };
         for chunk in wav.chunks(block).take(4) {
-            vc.process(chunk)?; // calentamiento
+            step(&mut vc, chunk)?; // calentamiento
         }
         vc.reset();
         let mut times: Vec<f32> = wav
             .chunks_exact(block)
             .map(|chunk| {
                 let t0 = Instant::now();
-                vc.process(chunk).map(|_| t0.elapsed().as_secs_f32() * 1000.0)
+                step(&mut vc, chunk).map(|_| t0.elapsed().as_secs_f32() * 1000.0)
             })
             .collect::<Result<_>>()?;
         let total: f32 = times.iter().sum();
@@ -308,7 +334,8 @@ fn bench(models: &ModelDir, input: Option<&Path>, seconds: f32, threads: usize) 
             budget,
             pct(0.5),
             pct(0.99),
-            ms(vc.algorithmic_latency_samples()),
+            ms(vc.algorithmic_latency_samples())
+                + ultra.as_ref().map_or(0.0, |(_, b)| b.latency_samples() as f32 * 1000.0 / bwe::OUTPUT_RATE as f32),
         );
     }
     Ok(())

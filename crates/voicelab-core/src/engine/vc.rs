@@ -84,7 +84,7 @@ pub struct StreamingVc {
     bn_buffer: Vec<f32>,
 }
 
-fn run_err(e: ort::Error) -> anyhow::Error {
+pub(crate) fn run_err(e: ort::Error) -> anyhow::Error {
     anyhow::anyhow!("ONNX Runtime: {e}")
 }
 

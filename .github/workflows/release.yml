@@ -54,7 +54,7 @@ jobs:
           uv run python export_onnx.py --out ../../models
           uv run python quantize.py --models ../../models
       - name: Dejar solo lo que descarga la app
-        run: rm models/spk_encoder.onnx
+        run: rm models/spk_encoder.onnx models/bwe_16k_48k.onnx
       - uses: actions/upload-artifact@v4
         with:
           name: models

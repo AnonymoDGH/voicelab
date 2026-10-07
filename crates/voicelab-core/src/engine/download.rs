@@ -10,7 +10,7 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
 
-use super::models::Manifest;
+use super::models::{Manifest, Variant};
 
 const RELEASES: &str = "https://github.com/AnonymoDGH/voicelab/releases/download";
 
@@ -40,17 +40,24 @@ pub fn required_files(m: &Manifest) -> BTreeSet<String> {
         m.variants.values().flat_map(|v| [v.asr.clone(), v.dit.clone(), v.gtm.clone()]).collect();
     files.insert(m.vocoder.file.clone());
     files.insert(m.speaker.file.clone());
+    files.extend(m.bwe.iter().map(|b| b.file.clone()));
     files
 }
 
-/// True when `dir` has a manifest and every required file with the right size.
+/// True when `dir` has a manifest with every mode and every required file with the right size.
+/// Model sets from before Ultra mode count as incomplete, so the app fetches the missing graphs
+/// (files already present with the right size are not downloaded again).
 pub fn is_complete(dir: &Path) -> bool {
     let Ok(text) = fs::read_to_string(dir.join("manifest.json")) else { return false };
     let Ok(m) = serde_json::from_str::<Manifest>(&text) else { return false };
-    required_files(&m).iter().all(|f| {
-        let expected = m.files.get(f).map(|e| e.bytes);
-        fs::metadata(dir.join(f)).is_ok_and(|md| Some(md.len()) == expected)
-    })
+    let all_modes = [Variant::Quality, Variant::LowLatency, Variant::Ultra]
+        .iter()
+        .all(|v| m.variants.contains_key(v.key()) && (!v.uses_bwe() || m.bwe.is_some()));
+    all_modes
+        && required_files(&m).iter().all(|f| {
+            let expected = m.files.get(f).map(|e| e.bytes);
+            fs::metadata(dir.join(f)).is_ok_and(|md| Some(md.len()) == expected)
+        })
 }
 
 #[derive(Debug, Clone, Copy, serde::Serialize)]
