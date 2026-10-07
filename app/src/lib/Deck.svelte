@@ -2,6 +2,7 @@
   import type { Effect, LiveInfo, LiveStatus, Settings, VoiceInfo } from "./api";
   import FxPanel from "./FxPanel.svelte";
   import LedMeter from "./LedMeter.svelte";
+  import Portrait from "./Portrait.svelte";
   import Switch from "./Switch.svelte";
   import VoicePrint from "./VoicePrint.svelte";
 
@@ -69,8 +70,15 @@
         <span class="badge mono" class:off={!enabled}>{enabled ? "IA" : "Original"}</span>
       {/if}
     </div>
-    <div class="voice-name">{voice?.name ?? "Sin voz"}</div>
-    <div class="voice-desc">{voice?.description || "Elige una voz de la biblioteca"}</div>
+    <div class="ident">
+      <div class="pic">
+        <Portrait src={voice?.portrait ?? null} name={voice?.name ?? ""} lit={onAir} />
+      </div>
+      <div class="who">
+        <div class="voice-name">{voice?.name ?? "Sin voz"}</div>
+        <div class="voice-desc">{voice?.description || "Elige una voz de la biblioteca"}</div>
+      </div>
+    </div>
     <div class="print">
       <VoicePrint print={voice?.print ?? []} height={26} lit={onAir} animate={onAir && (stats?.gate_open ?? false)} />
     </div>
@@ -217,6 +225,21 @@
     background: transparent;
     color: var(--lcd-text-2);
     border: 1px solid var(--lcd-text-2);
+  }
+  .ident {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    margin-top: 6px;
+  }
+  .pic {
+    aspect-ratio: 4 / 3;
+    border-radius: 7px;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--lcd-text-2) 30%, transparent);
+  }
+  .who {
+    min-width: 0;
   }
   .voice-name {
     font-size: 22px;

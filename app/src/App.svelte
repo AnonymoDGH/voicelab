@@ -7,6 +7,7 @@
   import SettingsView from "./lib/SettingsView.svelte";
   import StatusBar from "./lib/StatusBar.svelte";
   import Voices from "./lib/Voices.svelte";
+  import { portraitFromFile } from "./lib/portrait";
   import { applyTheme } from "./theme";
 
   type View = "voices" | "clone" | "settings";
@@ -116,6 +117,16 @@
     }
   }
 
+  async function setPortrait(v: VoiceInfo, file: File | null) {
+    try {
+      if (file) await api!.setVoicePortrait(v.id, await portraitFromFile(file));
+      else await api!.clearVoicePortrait(v.id);
+      await refresh();
+    } catch (e) {
+      notify(e instanceof Error ? e.message : String(e), true);
+    }
+  }
+
   async function saveSettings(s: Settings) {
     await api!.updateSettings(s);
     ov!.settings = s;
@@ -131,11 +142,14 @@
     fxTimer = setTimeout(() => api!.updateSettings(s), commit ? 0 : 60);
   }
 
-  async function voiceCreated(v: VoiceInfo) {
+  async function voiceCreated(v: VoiceInfo, photo: string | null) {
+    // The voice exists already: if its picture fails to save, it can be set again from its tile.
+    const photoError = photo ? await api!.setVoicePortrait(v.id, photo).then(() => null, String) : null;
     await refresh();
     await selectVoice(v.id);
     view = "voices";
-    notify(`Voz «${v.name}» creada`);
+    if (photoError) notify(`Voz «${v.name}» creada, pero no se guardó la foto: ${photoError}`, true);
+    else notify(`Voz «${v.name}» creada`);
   }
 
   async function setFlag(flags: { enabled?: boolean; muted?: boolean; monitor?: boolean }) {
@@ -201,7 +215,15 @@
         {/if}
 
         {#if view === "voices"}
-          <Voices voices={ov.voices} selected={ov.settings.voice} live={running} onSelect={selectVoice} onDelete={deleteVoice} onClone={() => (view = "clone")} />
+          <Voices
+            voices={ov.voices}
+            selected={ov.settings.voice}
+            live={running}
+            onSelect={selectVoice}
+            onDelete={deleteVoice}
+            onPortrait={setPortrait}
+            onClone={() => (view = "clone")}
+          />
         {:else if view === "clone"}
           <Clone {api} modelsReady={ov.models_ready} onCreated={voiceCreated} />
         {:else}

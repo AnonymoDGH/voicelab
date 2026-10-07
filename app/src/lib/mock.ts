@@ -15,6 +15,10 @@ const REAL_PRINTS: Record<string, number[]> = {
   sofia: [0.443, 0.589, 0.355, 0.15, 0.472, 0.878, 0.541, 0.879, 0.446, 0.231, 0.43, 0.552, 0.87, 0.879, 0.494, 0.482, 0.733, 1.0, 0.399, 0.303, 0.633, 0.607, 0.987, 0.642, 0.406, 0.688, 0.695, 0.568, 0.794, 0.302, 0.968, 0.588],
 };
 
+// Illustrations of the built-in voices, straight from the repo's voices/ folder.
+const PORTRAITS = import.meta.glob<string>("../../../voices/*.svg", { query: "?url", import: "default", eager: true });
+const portrait = (id: string) => PORTRAITS[`../../../voices/${id}.svg`] ?? null;
+
 // Deterministic stand-in for voices without a known fingerprint.
 function print(id: string): number[] {
   if (REAL_PRINTS[id]) return REAL_PRINTS[id];
@@ -36,8 +40,29 @@ export function mockApi(): Api {
     ["marta", "Marta", "Femenina · VCTK p333"],
     ["pablo", "Pablo", "Masculina · VCTK p259"],
     ["sofia", "Sofía", "Femenina · VCTK p229"],
-  ].map(([id, name, description]) => ({ id, name, description, source: VCTK, license: "CC-BY-4.0", builtin: true, print: print(id) }));
-  voices.push({ id: "mi-voz", name: "Mi voz", description: "Grabada en casa", source: "grabación", license: "propia", builtin: false, print: print("mi-voz") });
+  ].map(([id, name, description]) => ({
+    id,
+    name,
+    description,
+    source: VCTK,
+    license: "CC-BY-4.0",
+    builtin: true,
+    print: print(id),
+    portrait: portrait(id),
+    custom_portrait: false,
+  }));
+  const userVoice = (id: string, name: string, description: string, source: string): VoiceInfo => ({
+    id,
+    name,
+    description,
+    source,
+    license: "propia",
+    builtin: false,
+    print: print(id),
+    portrait: null,
+    custom_portrait: false,
+  });
+  voices.push(userVoice("mi-voz", "Mi voz", "Grabada en casa", "grabación"));
 
   const params = new URLSearchParams(location.search);
   const settings: Settings = {
@@ -149,21 +174,29 @@ export function mockApi(): Api {
     },
     async cloneFromFile(path, name, description) {
       await wait(1200);
-      const id = name.toLowerCase().replace(/\W+/g, "-");
-      const v = { id, name, description, source: path.split(/[\\/]/).pop() ?? "", license: "propia", builtin: false, print: print(id) };
+      const v = userVoice(name.toLowerCase().replace(/\W+/g, "-"), name, description, path.split(/[\\/]/).pop() ?? "");
       voices.push(v);
       return v;
     },
     async recordAndClone(seconds, name, description) {
       await wait(seconds * 1000 + 1000);
-      const id = name.toLowerCase().replace(/\W+/g, "-");
-      const v = { id, name, description, source: "grabación", license: "propia", builtin: false, print: print(id) };
+      const v = userVoice(name.toLowerCase().replace(/\W+/g, "-"), name, description, "grabación");
       voices.push(v);
       return v;
     },
     async deleteVoice(id) {
       const i = voices.findIndex((v) => v.id === id);
       if (i >= 0) voices.splice(i, 1);
+    },
+    async setVoicePortrait(id, dataUrl) {
+      const v = voices.find((v) => v.id === id)!;
+      v.portrait = dataUrl;
+      v.custom_portrait = true;
+    },
+    async clearVoicePortrait(id) {
+      const v = voices.find((v) => v.id === id)!;
+      v.portrait = v.builtin ? portrait(id) : null;
+      v.custom_portrait = false;
     },
     async downloadModels(onProgress) {
       const total = 707_000_000;

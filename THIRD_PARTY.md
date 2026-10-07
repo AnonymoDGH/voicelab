@@ -8,11 +8,16 @@
 | WavLM-Large + ECAPA-TDNN | Encoder de hablante para clonar voces (`spk_encoder.int8.onnx`) | MIT (Microsoft) | [microsoft/unilm](https://github.com/microsoft/unilm/tree/master/wavlm), [UniSpeech](https://github.com/microsoft/UniSpeech) |
 | VCTK Corpus | Audio de referencia de las 8 voces incluidas (`voices/*.vlvoice`) | CC-BY-4.0 | [CSTR, Univ. de Edimburgo](https://datashare.ed.ac.uk/handle/10283/3443) vía [kyutai/tts-voices](https://huggingface.co/kyutai/tts-voices) |
 | ONNX Runtime | Inferencia en CPU | MIT | [microsoft/onnxruntime](https://github.com/microsoft/onnxruntime) |
+| Notionists (Zoish) | Ilustraciones de los retratos de las voces incluidas (`voices/*.svg`) | CC0-1.0 | [heyzoish.gumroad.com](https://heyzoish.gumroad.com/l/notionists) |
+| DiceBear | Genera esos retratos (`npm run portraits`; solo desarrollo, no se distribuye) | MIT | [dicebear/dicebear](https://github.com/dicebear/dicebear) |
 | Geist, Geist Mono | Tipografías de la interfaz | OFL-1.1 | [vercel/geist-font](https://github.com/vercel/geist-font) |
 | VB-Cable | Micrófono virtual (no se incluye; lo instala el usuario) | Donationware | [vb-audio.com](https://vb-audio.com/Cable/) |
 
 Las voces incluidas son huellas de voz (embeddings de 256 valores) calculadas de clips de VCTK;
 no contienen el audio original. Atribución: *CSTR VCTK Corpus, University of Edinburgh, CC-BY-4.0*.
+
+Sus retratos son personajes ficticios, no los hablantes de VCTK: ilustraciones del estilo
+*Notionists* de Zoish (dominio público, CC0 1.0) combinadas con DiceBear.
 
 Las dependencias de Rust y npm conservan sus propias licencias (MIT/Apache-2.0 en su mayoría);
 ver `Cargo.lock` y `app/package-lock.json`.

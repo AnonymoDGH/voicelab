@@ -43,6 +43,10 @@ export interface VoiceInfo {
   builtin: boolean;
   /** 32 values in [0, 1] summarizing the speaker embedding (the voice's "fingerprint"). */
   print: number[];
+  /** The voice's picture as a data: URL: the user's own, or the illustration of a built-in voice. */
+  portrait: string | null;
+  /** The picture is the user's own, so it can be removed. */
+  custom_portrait: boolean;
 }
 
 export interface LiveInfo {
@@ -114,6 +118,9 @@ export interface Api {
   cloneFromFile(path: string, name: string, description: string): Promise<VoiceInfo>;
   recordAndClone(seconds: number, name: string, description: string): Promise<VoiceInfo>;
   deleteVoice(id: string): Promise<void>;
+  /** dataUrl: a small square image (see portrait.ts), saved as the voice's own picture. */
+  setVoicePortrait(id: string, dataUrl: string): Promise<void>;
+  clearVoicePortrait(id: string): Promise<void>;
   downloadModels(onProgress: (p: DownloadProgress) => void): Promise<void>;
   pickAudioFile(): Promise<string | null>;
   openUrl(url: string): Promise<void>;
@@ -140,6 +147,8 @@ async function tauriApi(): Promise<Api> {
     cloneFromFile: (path, name, description) => invoke("clone_voice_file", { path, name, description }),
     recordAndClone: (seconds, name, description) => invoke("record_and_clone", { seconds, name, description }),
     deleteVoice: (id) => invoke("delete_voice", { id }),
+    setVoicePortrait: (id, dataUrl) => invoke("set_voice_portrait", { id, dataUrl }),
+    clearVoicePortrait: (id) => invoke("clear_voice_portrait", { id }),
     async downloadModels(onProgress) {
       const unlisten = await listen<DownloadProgress>("download-progress", (e) => onProgress(e.payload));
       try {
