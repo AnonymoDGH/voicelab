@@ -1,11 +1,16 @@
 name: Release
 
-# Push a tag like v0.1.0 to build the Windows installer, export the models and publish a
-# GitHub release with everything attached. The app downloads its models from the release
-# matching its version.
+# Push a tag like v0.1.0 (or run it by hand with a version) to build the Windows installer,
+# export the models and publish a GitHub release with everything attached. The app downloads
+# its models from the release matching its version, so the version must match Cargo.toml.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versión a publicar, sin la v (ej. 0.1.0)"
+        required: true
 
 permissions:
   contents: write
@@ -81,7 +86,9 @@ jobs:
           path: artifacts
       - uses: softprops/action-gh-release@v2
         with:
-          name: VoiceLab ${{ github.ref_name }}
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          name: VoiceLab ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
           body_path: .github/RELEASE_NOTES.md
           files: |
             artifacts/windows/*
