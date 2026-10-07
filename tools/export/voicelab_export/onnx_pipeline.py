@@ -19,7 +19,7 @@ FRAME_LEN = 400
 FRAME_SHIFT = 160
 PADDED_LEN = 512
 N_MELS = 80
-VC_FRAMES_PER_CHUNK = 16
+BN_UPSAMPLE = 4
 VOCODER_OVERLAP = 2
 UPSAMPLE = 160
 
@@ -188,12 +188,12 @@ class OnnxVC:
         if not bns:
             return None
         bn = np.concatenate(bns)
-        if self.enc_cache is not None:
-            bn = np.concatenate([self.enc_cache, bn])
+        # Prepend the previous call's last frame (replicate the first frame at stream start;
+        # MeanVC2 instead stretched the first block's frames, which ties output to block size).
+        bn = np.concatenate([self.enc_cache if self.enc_cache is not None else bn[:1], bn])
         self.enc_cache = bn[-1:]
-        if bn.shape[0] < 2:
-            return None
-        return interp_linear_align_corners(bn, VC_FRAMES_PER_CHUNK + 1)[1:]
+        # align_corners to 4(L-1)+1 points = exact 4x upsampling (BN 40 ms -> mel 10 ms)
+        return interp_linear_align_corners(bn, BN_UPSAMPLE * (bn.shape[0] - 1) + 1)[1:]
 
     def vc_step(self, cond: np.ndarray) -> np.ndarray:
         x = self.noise_fn(cond.shape[0]).copy()
@@ -235,9 +235,7 @@ class OnnxVC:
             return None
         self.bn_buffer = np.concatenate([self.bn_buffer, bn])
         parts = []
-        for _ in range(4):
-            if self.bn_buffer.shape[0] < self.window:
-                break
+        while self.bn_buffer.shape[0] >= self.window:
             cond = self.bn_buffer[:self.window]
             self.bn_buffer = self.bn_buffer[self.chunk:]
             parts.append(self.decode_mel(self.vc_step(cond)))
