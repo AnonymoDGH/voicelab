@@ -20,6 +20,16 @@ pub fn source() -> String {
     std::env::var("VOICELAB_MODEL_URL").unwrap_or_else(|_| format!("{RELEASES}/v{}/", env!("CARGO_PKG_VERSION")))
 }
 
+/// HTTP client that trusts the OS certificate store, so downloads work behind corporate proxies
+/// and antivirus HTTPS inspection (their root CA is installed in the system, not in webpki).
+fn agent() -> ureq::Agent {
+    use ureq::tls::{RootCerts, TlsConfig};
+    ureq::Agent::config_builder()
+        .tls_config(TlsConfig::builder().root_certs(RootCerts::PlatformVerifier).build())
+        .build()
+        .into()
+}
+
 fn url(base: &str, file: &str) -> String {
     format!("{}/{file}", base.trim_end_matches('/'))
 }
@@ -52,7 +62,9 @@ pub struct Progress {
 /// Download (or resume after a failure) every required file into `dir`.
 pub fn download(dir: &Path, base: &str, mut progress: impl FnMut(Progress, &str)) -> Result<()> {
     fs::create_dir_all(dir)?;
-    let manifest_text = ureq::get(&url(base, "manifest.json"))
+    let http = agent();
+    let manifest_text = http
+        .get(&url(base, "manifest.json"))
         .call()
         .with_context(|| format!("no se pudo descargar el manifiesto de {base}"))?
         .body_mut()
@@ -71,7 +83,7 @@ pub fn download(dir: &Path, base: &str, mut progress: impl FnMut(Progress, &str)
             continue;
         }
         let part = dir.join(format!("{file}.part"));
-        let mut resp = ureq::get(&url(base, file)).call().with_context(|| format!("descargando {file}"))?;
+        let mut resp = http.get(&url(base, file)).call().with_context(|| format!("descargando {file}"))?;
         let mut reader = resp.body_mut().with_config().limit(entry.bytes + 1).reader();
         let mut out = File::create(&part)?;
         let mut hasher = Sha256::new();

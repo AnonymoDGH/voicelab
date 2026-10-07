@@ -311,10 +311,17 @@ fn error_callback(
     last_error: &Arc<Mutex<Option<String>>>,
 ) -> impl FnMut(cpal::Error) + Send + 'static {
     let (stats, last_error) = (stats.clone(), last_error.clone());
-    move |e| {
-        stats.errors.fetch_add(1, Ordering::Relaxed);
-        if let Ok(mut g) = last_error.lock() {
-            *g = Some(format!("error de audio: {e}"));
+    move |e| match e.kind() {
+        // A glitch the OS already recovered from, or the default device being rerouted.
+        cpal::ErrorKind::Xrun => {
+            stats.xruns.fetch_add(1, Ordering::Relaxed);
+        }
+        cpal::ErrorKind::DeviceChanged => {}
+        _ => {
+            stats.errors.fetch_add(1, Ordering::Relaxed);
+            if let Ok(mut g) = last_error.lock() {
+                *g = Some(format!("error de audio: {e}"));
+            }
         }
     }
 }

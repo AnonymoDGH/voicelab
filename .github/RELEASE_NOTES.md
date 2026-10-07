@@ -19,12 +19,20 @@ Cambiador de voz con IA en tiempo real, solo con la CPU.
 
 Con la línea de comandos: `voicelab download-models`, después `voicelab bench` y `voicelab run --voice carlos`.
 
-## Novedades
+## Cambios en esta versión
+
+- Los microcortes que informa Windows ya no salen como error rojo: se cuentan en la barra de estado.
+- Aviso cuando el micrófono elegido no envía sonido (micro equivocado, apagado o bloqueado por la
+  privacidad de Windows), con qué revisar.
+- La lectura de CPU ya no parpadea a 0 %.
+- Se prefiere «CABLE Input» (estéreo) frente a «CABLE In 16ch» al elegir el micrófono virtual.
+- Las descargas usan los certificados de Windows (funciona tras proxies corporativos o antivirus
+  que inspeccionan HTTPS).
+
+## Qué incluye VoiceLab
 
 - Conversión de voz en streaming con MeanVC2 sobre ONNX Runtime: modo Rápido (~225 ms) y Calidad (~305 ms).
 - Clonado de voz desde un archivo o grabándote (10–20 s).
 - 8 voces incluidas, seis temas y atajo global `Ctrl+Alt+V`.
 
-Primera versión: el motor está verificado con tests automáticos, pero el audio en tiempo real aún no
-se ha probado en un PC con Windows. Si algo falla, abre un issue con la salida de `voicelab devices`
-y `voicelab bench`.
+Si algo falla, abre un issue con la salida de `voicelab devices` y `voicelab bench`.

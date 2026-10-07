@@ -77,9 +77,14 @@ pub struct Stats {
     pub block_ms: AtomicF32,
     pub output_buffer_ms: AtomicF32,
     pub gate_open: AtomicBool,
+    /// The input has been exact digital silence for a few seconds (wrong or muted device,
+    /// or Windows microphone privacy blocking the app). A real microphone always has noise.
+    pub input_silent: AtomicBool,
     pub blocks: AtomicU64,
     pub overruns: AtomicU64,
     pub underruns: AtomicU64,
+    /// Glitches reported by the OS audio stack (WASAPI xruns); not fatal.
+    pub xruns: AtomicU64,
     pub errors: AtomicU64,
 }
 
@@ -93,16 +98,20 @@ pub struct StatsSnapshot {
     pub load: f32,
     pub output_buffer_ms: f32,
     pub gate_open: bool,
+    pub input_silent: bool,
     pub blocks: u64,
     pub overruns: u64,
     pub underruns: u64,
+    pub xruns: u64,
     pub errors: u64,
 }
 
 impl Stats {
     pub fn snapshot(&self) -> StatsSnapshot {
         let block_ms = self.block_ms.load();
-        let process_ms_peak = self.process_ms_peak.take();
+        // Peak over the last second of blocks, maintained by the processor (not reset on read,
+        // so the UI can poll faster than blocks arrive).
+        let process_ms_peak = self.process_ms_peak.load();
         StatsSnapshot {
             input_peak: self.input_peak.take(),
             output_peak: self.output_peak.take(),
@@ -112,9 +121,11 @@ impl Stats {
             load: if block_ms > 0.0 { process_ms_peak / block_ms } else { 0.0 },
             output_buffer_ms: self.output_buffer_ms.load(),
             gate_open: self.gate_open.load(Ordering::Relaxed),
+            input_silent: self.input_silent.load(Ordering::Relaxed),
             blocks: self.blocks.load(Ordering::Relaxed),
             overruns: self.overruns.load(Ordering::Relaxed),
             underruns: self.underruns.load(Ordering::Relaxed),
+            xruns: self.xruns.load(Ordering::Relaxed),
             errors: self.errors.load(Ordering::Relaxed),
         }
     }
@@ -123,6 +134,8 @@ impl Stats {
 pub struct Processor {
     vc: StreamingVc,
     block: usize,
+    recent_ms: std::collections::VecDeque<f32>,
+    silent_samples: usize,
     input: StreamResampler,
     sinks: Vec<StreamResampler>,
     pending: Vec<f32>,
@@ -149,6 +162,8 @@ impl Processor {
         stats.block_ms.store(block as f32 * 1000.0 / SAMPLE_RATE as f32);
         Ok(Self {
             block,
+            recent_ms: std::collections::VecDeque::new(),
+            silent_samples: 0,
             input: StreamResampler::new(input_rate, SAMPLE_RATE)?,
             sinks: sink_rates.iter().map(|&r| StreamResampler::new(SAMPLE_RATE, r)).collect::<Result<_>>()?,
             pending: Vec::new(),
@@ -196,8 +211,16 @@ impl Processor {
         self.was_enabled = enabled;
         let ms = t0.elapsed().as_secs_f32() * 1000.0;
         self.stats.process_ms.store(ms);
-        self.stats.process_ms_peak.fetch_max(ms);
+        let window = (SAMPLE_RATE as usize / self.block).max(1); // ~1 s of blocks
+        self.recent_ms.push_back(ms);
+        while self.recent_ms.len() > window {
+            self.recent_ms.pop_front();
+        }
+        self.stats.process_ms_peak.store(self.recent_ms.iter().copied().fold(0.0, f32::max));
         self.stats.blocks.fetch_add(1, Ordering::Relaxed);
+
+        self.silent_samples = if block.iter().all(|&s| s == 0.0) { self.silent_samples + block.len() } else { 0 };
+        self.stats.input_silent.store(self.silent_samples >= 3 * SAMPLE_RATE as usize, Ordering::Relaxed);
 
         let gain = if c.muted.load(Ordering::Relaxed) { 0.0 } else { c.output_gain.load() };
         self.gate.process(rms_db(block), c.gate_db.load(), &mut self.out16);

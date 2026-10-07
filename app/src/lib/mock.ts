@@ -113,9 +113,11 @@ export function mockApi(): Api {
               load: settings.variant === "40ms" ? 0.3 : 0.18,
               output_buffer_ms: 70,
               gate_open: speech > 0.05,
+              input_silent: params.get("mic") === "silent",
               blocks: Math.floor(t * 12),
               overruns: 0,
               underruns: 0,
+              xruns: 0,
               errors: 0,
             }
           : null,

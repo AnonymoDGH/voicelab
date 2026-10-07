@@ -95,6 +95,13 @@
     </div>
   </div>
 
+  {#if running && stats?.input_silent}
+    <div class="mic-warn" role="alert">
+      <strong>Tu micrófono no envía sonido</strong>
+      <span>Elige otro en <b>Ajustes → Audio</b>, o activa el acceso en Windows: Configuración → Privacidad → Micrófono.</span>
+    </div>
+  {/if}
+
   <div class="switches">
     <Switch label="Voz IA" hint={hotkey} checked={enabled} disabled={!running} onchange={onEnabled} />
     <Switch label="Escucharme" hint="por tus auriculares" checked={settings.monitor_enabled} onchange={onMonitor} />
@@ -274,6 +281,21 @@
   .dot.open {
     background: var(--ok);
     box-shadow: 0 0 8px var(--ok);
+  }
+  .mic-warn {
+    display: grid;
+    gap: 3px;
+    padding: 10px 12px;
+    border-radius: var(--r);
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--text-2);
+    border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+    background: color-mix(in srgb, var(--warn) 9%, transparent);
+  }
+  .mic-warn strong {
+    color: var(--warn);
+    font-size: 13px;
   }
   .switches {
     display: grid;
