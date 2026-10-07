@@ -1,0 +1,169 @@
+<!doctype html>
+<!-- README banner, rendered by scripts/screenshots.mjs with the app's own fonts and theme tokens. -->
+<html lang="es" data-theme="estudio">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <style>
+      html,
+      body {
+        overflow: visible;
+      }
+      .banner {
+        width: 1280px;
+        height: 440px;
+        position: relative;
+        display: grid;
+        grid-template-columns: 1fr 470px;
+        align-items: center;
+        gap: 56px;
+        padding: 0 72px;
+        background:
+          radial-gradient(circle at 78% 40%, rgb(255 138 31 / 0.12), transparent 55%),
+          linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 100% 44px,
+          var(--bg);
+        overflow: hidden;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-family: var(--mono);
+        font-weight: 600;
+        font-size: 22px;
+      }
+      .brand i {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        background: var(--signal);
+        box-shadow: var(--glow);
+      }
+      h1 {
+        font-size: 78px;
+        line-height: 0.95;
+        letter-spacing: -0.04em;
+        margin: 26px 0 18px;
+      }
+      h1 span {
+        color: var(--signal);
+      }
+      .tag {
+        font-size: 21px;
+        color: var(--text-2);
+      }
+      .chips {
+        display: flex;
+        gap: 8px;
+        margin-top: 26px;
+      }
+      .chips span {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 6px 10px;
+        border: 1px solid var(--line-strong);
+        border-radius: 6px;
+        color: var(--text-2);
+        background: var(--surface);
+      }
+      .lcd {
+        background: var(--lcd);
+        border: 1px solid var(--line-strong);
+        border-radius: 18px;
+        padding: 22px 24px;
+        box-shadow: 0 30px 60px rgb(0 0 0 / 0.45);
+      }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .live {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        padding: 4px 10px;
+        border-radius: 5px;
+        background: var(--signal);
+        color: var(--signal-ink);
+      }
+      .live i {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--signal-ink);
+      }
+      .name {
+        font-size: 40px;
+        font-weight: 600;
+        letter-spacing: -0.03em;
+        margin-top: 8px;
+      }
+      .desc {
+        color: var(--lcd-text-2);
+        font-size: 14px;
+      }
+      .print {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        height: 96px;
+        margin: 22px 0 18px;
+      }
+      .print b {
+        flex: 1;
+        border-radius: 3px;
+        background: var(--signal);
+      }
+      .readouts {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        border-top: 1px dashed #3a3630;
+        padding-top: 14px;
+        font-family: var(--mono);
+      }
+      .readouts small {
+        display: block;
+        font-size: 10.5px;
+        letter-spacing: 0.12em;
+        color: var(--lcd-text-2);
+        margin-bottom: 4px;
+      }
+      .readouts span {
+        font-size: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="banner" id="banner">
+      <div>
+        <div class="brand"><i></i>voicelab</div>
+        <h1>Tu voz,<br /><span>otra voz.</span></h1>
+        <div class="tag">Cambiador de voz con IA en tiempo real, solo con la CPU.</div>
+        <div class="chips"><span>Sin GPU</span><span>Clona cualquier voz</span><span>Español</span><span>Código abierto</span></div>
+      </div>
+      <div class="lcd">
+        <div class="row"><span class="label">Voz</span><span class="live"><i></i>EN VIVO</span></div>
+        <div class="name">Carlos</div>
+        <div class="desc">Masculina · clonada de 12 s de audio</div>
+        <div class="print" id="print"></div>
+        <div class="readouts">
+          <div><small>LATENCIA</small><span>225 ms</span></div>
+          <div><small>CPU</small><span>25 %</span></div>
+          <div><small>MODO</small><span>Rápido</span></div>
+        </div>
+      </div>
+    </div>
+    <script type="module">
+      // Carlos' real fingerprint, mirrored for a fuller waveform.
+      const p = [0.411, 0.846, 0.62, 1.0, 0.846, 0.898, 0.38, 0.556, 0.79, 0.443, 0.517, 0.733, 0.15, 0.824, 0.603, 0.732];
+      const bars = [...p, ...p.slice().reverse()];
+      document.getElementById("print").innerHTML = bars.map((v) => `<b style="height:${12 + v * 88}%"></b>`).join("");
+    </script>
+  </body>
+</html>
