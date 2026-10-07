@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/voicelab-core", "crates/voicelab-cli"]
+members = ["crates/voicelab-core", "crates/voicelab-cli", "app/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
@@ -25,6 +25,7 @@ sha2 = "0.11"
 rand = "0.10"
 rand_distr = "0.6"
 dirs = "7"
+ureq = "3"
 clap = { version = "4.6", features = ["derive"] }
 voicelab-core = { path = "crates/voicelab-core" }
 

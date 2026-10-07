@@ -1,0 +1,27 @@
+[package]
+name = "voicelab-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "VoiceLab: cambiador de voz con IA en tiempo real"
+
+[lib]
+name = "voicelab_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+voicelab-core.workspace = true
+tauri = { version = "2.12", features = [] }
+tauri-plugin-dialog = "2.8"
+tauri-plugin-opener = "2.7"
+tauri-plugin-global-shortcut = "2.4"
+
+[features]
+# Embeds the built UI instead of using the dev server; `tauri build` enables it automatically.
+custom-protocol = ["tauri/custom-protocol"]

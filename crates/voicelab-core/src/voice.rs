@@ -39,6 +39,19 @@ impl Voice {
         }
     }
 
+    /// 32 values in [0.15, 1]: RMS of consecutive 8-dim groups of the embedding, normalized.
+    /// A compact visual "fingerprint" of the voice for the UI.
+    pub fn fingerprint(&self) -> Vec<f32> {
+        let groups: Vec<f32> = self
+            .embedding
+            .chunks(SPK_DIM / 32)
+            .map(|c| (c.iter().map(|v| v * v).sum::<f32>() / c.len() as f32).sqrt())
+            .collect();
+        let (lo, hi) = groups.iter().fold((f32::MAX, f32::MIN), |(lo, hi), &v| (lo.min(v), hi.max(v)));
+        let span = (hi - lo).max(1e-6);
+        groups.iter().map(|v| 0.15 + 0.85 * (v - lo) / span).collect()
+    }
+
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;

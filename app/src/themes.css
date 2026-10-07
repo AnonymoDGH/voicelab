@@ -1,0 +1,136 @@
+/*
+ * Theme tokens. Every color in the UI comes from these variables; components never hardcode
+ * colors. One "signal" color per theme marks live/selected state; level meters always use the
+ * semantic ok/warn/bad scale. Any element can preview another theme with data-theme="…".
+ */
+
+:root,
+[data-theme="estudio"] {
+  --bg: #131210;
+  --surface: #1b1a17;
+  --surface-2: #23211d;
+  --surface-3: #2c2a25;
+  --line: #322f29;
+  --line-strong: #46413a;
+  --text: #f1ede4;
+  --text-2: #a8a194;
+  --text-3: #736c60;
+  --signal: #ff8a1f;
+  --signal-ink: #1b0f03;
+  --signal-soft: rgb(255 138 31 / 0.12);
+  --signal-line: rgb(255 138 31 / 0.55);
+  --lcd: #0e0d0b;
+  --lcd-text: #f6f1e7;
+  --lcd-text-2: #8f887b;
+  --ok: #8bd450;
+  --warn: #f2c14e;
+  --bad: #ff5a4e;
+  --meter-off: #2a2723;
+  --glow: 0 0 22px rgb(255 138 31 / 0.35);
+  --shadow: 0 10px 30px rgb(0 0 0 / 0.35);
+  color-scheme: dark;
+}
+
+[data-theme="papel"] {
+  --bg: #efeae1;
+  --surface: #fbf9f5;
+  --surface-2: #f2ede4;
+  --surface-3: #e8e1d4;
+  --line: #ddd5c6;
+  --line-strong: #c4b9a5;
+  --text: #1c1a16;
+  --text-2: #5f584c;
+  --text-3: #8f8676;
+  --signal: #d23f14;
+  --signal-ink: #fff8f2;
+  --signal-soft: rgb(210 63 20 / 0.08);
+  --signal-line: rgb(210 63 20 / 0.5);
+  --lcd: #1f1d19;
+  --lcd-text: #f6efe2;
+  --lcd-text-2: #a59c8b;
+  --ok: #2f8f46;
+  --warn: #c58a1c;
+  --bad: #c62f2f;
+  --meter-off: #e3dccd;
+  --glow: 0 4px 14px rgb(210 63 20 / 0.28);
+  --shadow: 0 8px 24px rgb(60 45 20 / 0.1);
+  color-scheme: light;
+}
+
+[data-theme="medianoche"] {
+  --bg: #0b1017;
+  --surface: #111823;
+  --surface-2: #17202d;
+  --surface-3: #1e2939;
+  --line: #222e3e;
+  --line-strong: #31405a;
+  --text: #e5ecf4;
+  --text-2: #8d9db1;
+  --text-3: #5d6c80;
+  --signal: #35d0e5;
+  --signal-ink: #03161a;
+  --signal-soft: rgb(53 208 229 / 0.12);
+  --signal-line: rgb(53 208 229 / 0.5);
+  --lcd: #070b10;
+  --lcd-text: #e9f6fb;
+  --lcd-text-2: #6f8299;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  --meter-off: #1a2431;
+  --glow: 0 0 22px rgb(53 208 229 / 0.32);
+  --shadow: 0 10px 30px rgb(0 0 0 / 0.4);
+  color-scheme: dark;
+}
+
+[data-theme="neon"] {
+  --bg: #0c0a10;
+  --surface: #141119;
+  --surface-2: #1b1722;
+  --surface-3: #241e2d;
+  --line: #2a2434;
+  --line-strong: #3d3450;
+  --text: #f6f1fc;
+  --text-2: #a99fba;
+  --text-3: #6f6584;
+  --signal: #ff3d9a;
+  --signal-ink: #1c0410;
+  --signal-soft: rgb(255 61 154 / 0.14);
+  --signal-line: rgb(255 61 154 / 0.6);
+  --lcd: #08060b;
+  --lcd-text: #fdf4ff;
+  --lcd-text-2: #8a7fa0;
+  --ok: #39f28a;
+  --warn: #ffd23f;
+  --bad: #ff4f5e;
+  --meter-off: #221d2b;
+  --glow: 0 0 26px rgb(255 61 154 / 0.5), 0 0 60px rgb(46 230 255 / 0.12);
+  --shadow: 0 10px 30px rgb(0 0 0 / 0.45);
+  color-scheme: dark;
+}
+
+[data-theme="contraste"] {
+  --bg: #000000;
+  --surface: #000000;
+  --surface-2: #0f0f0f;
+  --surface-3: #1f1f1f;
+  --line: #8a8a8a;
+  --line-strong: #ffffff;
+  --text: #ffffff;
+  --text-2: #e8e8e8;
+  --text-3: #c4c4c4;
+  --signal: #ffd400;
+  --signal-ink: #000000;
+  --signal-soft: rgb(255 212 0 / 0.16);
+  --signal-line: #ffd400;
+  --lcd: #000000;
+  --lcd-text: #ffffff;
+  --lcd-text-2: #d0d0d0;
+  --ok: #3dff6e;
+  --warn: #ffd400;
+  --bad: #ff4d4d;
+  --meter-off: #2b2b2b;
+  --glow: none;
+  --shadow: none;
+  color-scheme: dark;
+}
