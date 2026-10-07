@@ -27,9 +27,13 @@ impl AtomicF32 {
     }
     /// Keep the maximum (for peak meters); returns nothing, readers `take` it.
     pub fn fetch_max(&self, v: f32) {
-        let _ = self
-            .0
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |cur| (v > f32::from_bits(cur)).then_some(v.to_bits()));
+        let mut cur = self.0.load(Ordering::Relaxed);
+        while v > f32::from_bits(cur) {
+            match self.0.compare_exchange_weak(cur, v.to_bits(), Ordering::Relaxed, Ordering::Relaxed) {
+                Ok(_) => break,
+                Err(actual) => cur = actual,
+            }
+        }
     }
     pub fn take(&self) -> f32 {
         f32::from_bits(self.0.swap(0, Ordering::Relaxed))

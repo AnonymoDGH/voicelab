@@ -50,7 +50,7 @@ export interface LiveInfo {
 export interface Overview {
   models_ready: boolean;
   models_dir: string;
-  model_repo: string;
+  model_source: string;
   voices: VoiceInfo[];
   inputs: Device[];
   outputs: Device[];

@@ -59,7 +59,7 @@ impl Voice {
         let st = SafeTensors::deserialize(&bytes).context("invalid voice file")?;
         let t = st.tensor("spk_emb").context("voice file has no spk_emb")?;
         ensure!(t.dtype() == Dtype::F32 && t.shape() == [SPK_DIM], "spk_emb must be f32[{SPK_DIM}]");
-        let embedding = t.data().chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
+        let embedding = t.data().as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect();
         let meta = header.metadata().clone().unwrap_or_default();
         let get = |k: &str| meta.get(k).cloned().unwrap_or_default();
         let id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("voz").to_string();

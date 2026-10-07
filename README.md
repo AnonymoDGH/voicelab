@@ -11,6 +11,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/AnonymoDGH/voicelab/releases/latest"><b>Descargar para Windows</b></a> ·
   <a href="#empezar">Empezar</a> ·
   <a href="#escúchalo">Escúchalo</a> ·
   <a href="#temas">Temas</a> ·
@@ -50,7 +51,8 @@ Una misma frase en español, convertida por el motor de VoiceLab (archivos de 12
 ## Empezar
 
 1. Instala [VB-Cable](https://vb-audio.com/Cable/) (gratis) y reinicia Windows.
-2. Abre VoiceLab. La primera vez descarga los modelos de IA (~700 MB, una sola vez).
+2. Descarga el instalador de la [última versión](https://github.com/AnonymoDGH/voicelab/releases/latest)
+   y ábrelo. La primera vez descarga los modelos de IA (~700 MB, una sola vez).
 3. Elige una voz, o clona la tuya en **Clonar**, y pulsa **EN VIVO**.
 4. En Discord, OBS o tu juego elige **CABLE Output** como micrófono.
 
@@ -135,6 +137,7 @@ flowchart LR
 ## Línea de comandos
 
 ```sh
+voicelab download-models                          # modelos de IA (~700 MB, una vez)
 voicelab devices                                  # micrófonos y salidas (marca VB-Cable)
 voicelab bench                                    # ¿llega tu CPU a tiempo real?
 voicelab run --voice carlos                       # micrófono -> voz IA -> VB-Cable
@@ -148,6 +151,10 @@ voicelab voices
 
 Requisitos: Rust estable y Node 20 o superior. En Linux también `libasound2-dev` y las
 [dependencias de Tauri](https://v2.tauri.app/start/prerequisites/).
+
+Para publicar una versión basta con crear un tag `vX.Y.Z`: el workflow
+[Release](.github/workflows/release.yml) exporta los modelos, compila el instalador en Windows y
+sube todo al release.
 
 ```sh
 # Motor y CLI

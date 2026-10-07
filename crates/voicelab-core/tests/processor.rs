@@ -24,7 +24,7 @@ fn speech_48k() -> Vec<f32> {
     let f = std::fs::read(repo().join("tests/fixtures/golden_120ms.safetensors")).unwrap();
     let st = safetensors::SafeTensors::deserialize(&f).unwrap();
     let x: Vec<f32> =
-        st.tensor("input").unwrap().data().chunks_exact(4).map(|b| f32::from_le_bytes(b.try_into().unwrap())).collect();
+        st.tensor("input").unwrap().data().as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect();
     resample_clip(&x, 16000, 48000).unwrap()
 }
 

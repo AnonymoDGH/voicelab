@@ -204,7 +204,7 @@
         <div class="progress"><div style="width:{(100 * progress.done) / Math.max(progress.total, 1)}%"></div></div>
         <span class="mono small">{mb(progress.done)} / {mb(progress.total)} MB · {progress.file}</span>
       {:else}
-        <p class="text2">~700 MB desde <span class="mono">{overview.model_repo}</span></p>
+        <p class="text2">~700 MB desde <span class="mono">{new URL(overview.model_source).host}</span></p>
         <button class="signal dl" onclick={download}><Icon name="download" size={15} /> Descargar modelos</button>
       {/if}
       {#if downloadError}

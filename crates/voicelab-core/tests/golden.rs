@@ -22,7 +22,7 @@ impl Fixture {
     fn f32(&self, key: &str) -> Vec<f32> {
         let st = SafeTensors::deserialize(&self.0).unwrap();
         let t = st.tensor(key).unwrap_or_else(|_| panic!("missing {key}"));
-        t.data().chunks_exact(4).map(|b| f32::from_le_bytes(b.try_into().unwrap())).collect()
+        t.data().as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect()
     }
 }
 

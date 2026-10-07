@@ -1,4 +1,5 @@
-//! First-run model download from a Hugging Face repo, with size and SHA-256 checks.
+//! First-run model download, with size and SHA-256 checks. By default the models come from the
+//! GitHub release matching this version (the release workflow exports and attaches them).
 //! Only the files the engine uses are fetched (the fp32 speaker encoder is skipped).
 
 use std::collections::BTreeSet;
@@ -11,14 +12,16 @@ use sha2::{Digest, Sha256};
 
 use super::models::Manifest;
 
-pub const DEFAULT_REPO: &str = "VoidWalkercero/voicelab-models";
+const RELEASES: &str = "https://github.com/AnonymoDGH/voicelab/releases/download";
 
-pub fn repo() -> String {
-    std::env::var("VOICELAB_MODEL_REPO").unwrap_or_else(|_| DEFAULT_REPO.to_string())
+/// Base URL the model files are fetched from (`VOICELAB_MODEL_URL` overrides it, e.g. a
+/// `https://huggingface.co/<repo>/resolve/main/` mirror).
+pub fn source() -> String {
+    std::env::var("VOICELAB_MODEL_URL").unwrap_or_else(|_| format!("{RELEASES}/v{}/", env!("CARGO_PKG_VERSION")))
 }
 
-fn url(repo: &str, file: &str) -> String {
-    format!("https://huggingface.co/{repo}/resolve/main/{file}")
+fn url(base: &str, file: &str) -> String {
+    format!("{}/{file}", base.trim_end_matches('/'))
 }
 
 /// Files the engine needs, from a manifest.
@@ -47,11 +50,11 @@ pub struct Progress {
 }
 
 /// Download (or resume after a failure) every required file into `dir`.
-pub fn download(dir: &Path, repo: &str, mut progress: impl FnMut(Progress, &str)) -> Result<()> {
+pub fn download(dir: &Path, base: &str, mut progress: impl FnMut(Progress, &str)) -> Result<()> {
     fs::create_dir_all(dir)?;
-    let manifest_text = ureq::get(&url(repo, "manifest.json"))
+    let manifest_text = ureq::get(&url(base, "manifest.json"))
         .call()
-        .with_context(|| format!("no se pudo descargar el manifiesto de {repo}"))?
+        .with_context(|| format!("no se pudo descargar el manifiesto de {base}"))?
         .body_mut()
         .read_to_string()?;
     let manifest: Manifest = serde_json::from_str(&manifest_text).context("manifiesto inválido")?;
@@ -68,7 +71,7 @@ pub fn download(dir: &Path, repo: &str, mut progress: impl FnMut(Progress, &str)
             continue;
         }
         let part = dir.join(format!("{file}.part"));
-        let mut resp = ureq::get(&url(repo, file)).call().with_context(|| format!("descargando {file}"))?;
+        let mut resp = ureq::get(&url(base, file)).call().with_context(|| format!("descargando {file}"))?;
         let mut reader = resp.body_mut().with_config().limit(entry.bytes + 1).reader();
         let mut out = File::create(&part)?;
         let mut hasher = Sha256::new();

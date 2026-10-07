@@ -49,6 +49,8 @@ enum Cmd {
         #[arg(long, default_value_t = 0.0)]
         seconds: f32,
     },
+    /// Descarga los modelos de IA (~700 MB, una sola vez)
+    DownloadModels,
     /// Lista las voces disponibles
     Voices,
     /// Convierte un archivo de audio a otra voz (mismo camino que el tiempo real)
@@ -113,6 +115,20 @@ fn main() -> Result<()> {
             let models = models()?;
             let v = resolve_voice(&models, &voice)?;
             run_live(&models, &v, input, output, monitor, variant, threads, gate, seconds)?;
+        }
+        Cmd::DownloadModels => {
+            use voicelab_core::engine::download;
+            let source = download::source();
+            println!("Descargando modelos de {source}\n  en {}", models_path.display());
+            let mut last = 0;
+            download::download(&models_path, &source, |p, file| {
+                let pct = p.done * 100 / p.total.max(1);
+                if pct != last {
+                    last = pct;
+                    eprint!("\r{pct:>3}%  {:>4} / {} MB  {file:<28}", p.done >> 20, p.total >> 20);
+                }
+            })?;
+            println!("\nModelos listos.");
         }
         Cmd::Voices => {
             let voices = voice::list_voices(&paths::voice_dirs());

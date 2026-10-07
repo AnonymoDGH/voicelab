@@ -64,7 +64,7 @@ export function mockApi(): Api {
   const overview = (): Overview => ({
     models_ready: modelsReady,
     models_dir: "C:\\Users\\tu\\AppData\\Roaming\\VoiceLab\\models",
-    model_repo: "VoidWalkercero/voicelab-models",
+    model_source: "https://github.com/AnonymoDGH/voicelab/releases/download/v0.1.0/",
     voices,
     inputs: [
       { id: "mic-1", name: "Micrófono (Realtek High Definition Audio)", is_default: true, is_virtual_cable: false },
