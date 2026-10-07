@@ -1,0 +1,19 @@
+# Rust
+/target/
+**/target/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+tools/export/ckpts/
+tools/export/out/
+
+# Model artifacts (downloaded or exported, never committed)
+/models/
+*.onnx
+*.onnx.data
+
+# Node / Tauri
+node_modules/
+app/ui/dist/
