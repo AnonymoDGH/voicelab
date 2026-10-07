@@ -81,8 +81,12 @@ oscuro de Windows.
 <img src="docs/images/clonar.webp" alt="Pantalla Clonar una voz con tres pasos: audio de referencia, nombre y permiso" width="100%">
 
 Elige un audio de 10–20 s de una sola persona hablando (wav, mp3, flac u ogg), o grábate desde el
-micrófono. VoiceLab calcula su **huella de voz** y la guarda como archivo `.vlvoice`. Las barras de
-cada tarjeta son esa huella dibujada: voces parecidas se parecen.
+micrófono. VoiceLab calcula su **huella de voz** y la guarda como archivo `.vlvoice`. Las barras del
+panel de la izquierda son esa huella dibujada: voces parecidas se parecen.
+
+Cada voz tiene además su retrato: las incluidas, un personaje ilustrado (ficticio); las tuyas, la
+foto que elijas al clonarla o después, con el botón de la cámara de su tarjeta. La foto también puede
+sustituir a la ilustración de una voz incluida.
 
 Solo con tu voz o con permiso de la persona; lee [Uso responsable](#uso-responsable).
 
@@ -166,6 +170,7 @@ cd app
 npm ci
 npm run tauri build                  # en Windows genera el instalador NSIS
 npm run screenshots                  # regenera las imágenes de este README
+npm run portraits                    # regenera los retratos de las voces incluidas
 ```
 
 <details>
@@ -190,7 +195,7 @@ crates/voicelab-cli    binario `voicelab`
 app/                   app de escritorio (Tauri + Svelte); app/media y app/scripts generan las imágenes
 tools/export/          MeanVC2 -> ONNX, fixtures golden y voces incluidas (solo desarrollo)
 tests/fixtures/        tensores de referencia para los tests de paridad
-voices/                voces incluidas (.vlvoice)
+voices/                voces incluidas (.vlvoice) y sus retratos (.svg)
 docs/                  imágenes y audios de este README
 ```
 

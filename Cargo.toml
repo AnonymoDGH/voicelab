@@ -28,6 +28,7 @@ nnnoiseless = { version = "0.5.2", default-features = false }
 dirs = "7"
 ureq = { version = "3", features = ["platform-verifier"] }
 clap = { version = "4.6", features = ["derive"] }
+base64 = "0.22"
 voicelab-core = { path = "crates/voicelab-core" }
 
 [profile.release]
