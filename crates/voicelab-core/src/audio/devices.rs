@@ -60,9 +60,20 @@ pub fn list(direction: Direction) -> Vec<DeviceInfo> {
         .collect()
 }
 
-/// The first virtual-cable output device (VB-Cable's "CABLE Input"), if installed.
+/// The preferred virtual-cable output: VB-Cable's stereo "CABLE Input" first, then its 16-channel
+/// endpoint or other virtual devices.
 pub fn find_virtual_cable() -> Option<DeviceInfo> {
-    list(Direction::Output).into_iter().find(|d| d.is_virtual_cable)
+    let rank = |d: &DeviceInfo| {
+        let n = d.name.to_lowercase();
+        if n.starts_with("cable input") {
+            0
+        } else if n.contains("16ch") {
+            2
+        } else {
+            1
+        }
+    };
+    list(Direction::Output).into_iter().filter(|d| d.is_virtual_cable).min_by_key(rank)
 }
 
 /// Find a device by exact id, else by case-insensitive name substring; `None` = system default.

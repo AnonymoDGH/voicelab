@@ -50,7 +50,7 @@ export interface LiveInfo {
 export interface Overview {
   models_ready: boolean;
   models_dir: string;
-  model_repo: string;
+  model_source: string;
   voices: VoiceInfo[];
   inputs: Device[];
   outputs: Device[];
@@ -70,9 +70,13 @@ export interface Stats {
   load: number;
   output_buffer_ms: number;
   gate_open: boolean;
+  /** Input has been exact digital silence for 3 s: wrong/muted mic or Windows privacy block. */
+  input_silent: boolean;
   blocks: number;
   overruns: number;
   underruns: number;
+  /** Glitches reported by Windows audio (not fatal). */
+  xruns: number;
   errors: number;
 }
 

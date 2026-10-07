@@ -14,7 +14,10 @@
     <span>{(info.output_rate / 1000).toFixed(1)} kHz</span>
     <span>bloque {Math.round(info.block_ms)} ms</span>
     <span>búfer {Math.round(stats?.output_buffer_ms ?? 0)} ms</span>
-    <span class:warn={(stats?.underruns ?? 0) > 0}>cortes {stats?.underruns ?? 0}</span>
+    <span class:warn={(stats?.underruns ?? 0) > 0} title="Veces que la salida se quedó sin audio">cortes {stats?.underruns ?? 0}</span>
+    {#if (stats?.xruns ?? 0) > 0}
+      <span title="Microcortes que informa Windows; no son graves salvo que suban sin parar">microcortes {stats?.xruns}</span>
+    {/if}
   {:else}
     <span>Detenido</span>
     <span class:ok={!!cable} class:warn={!cable}>{cable ? `Micrófono virtual: ${cable.name}` : "VB-Cable no instalado"}</span>

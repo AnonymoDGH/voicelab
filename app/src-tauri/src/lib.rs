@@ -94,7 +94,7 @@ fn find_voice(id: &str) -> CmdResult<Voice> {
 struct Overview {
     models_ready: bool,
     models_dir: String,
-    model_repo: String,
+    model_source: String,
     voices: Vec<VoiceDto>,
     inputs: Vec<DeviceInfo>,
     outputs: Vec<DeviceInfo>,
@@ -111,7 +111,7 @@ fn overview(state: State<'_, AppState>) -> Overview {
     Overview {
         models_ready: inner.models.is_some(),
         models_dir: paths::models_dir().display().to_string(),
-        model_repo: download::repo(),
+        model_source: download::source(),
         voices: voices(),
         inputs: devices::list(Direction::Input),
         outputs: devices::list(Direction::Output),
@@ -334,7 +334,7 @@ async fn download_models(app: AppHandle) -> CmdResult<()> {
     let handle = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let mut last = 0u64;
-        download::download(&dir, &download::repo(), |p, file| {
+        download::download(&dir, &download::source(), |p, file| {
             // ~1 event per MB keeps the UI smooth without flooding it.
             if p.done - last >= 1 << 20 || p.done == p.total {
                 last = p.done;

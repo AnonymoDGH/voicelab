@@ -8,6 +8,9 @@ from pathlib import Path
 
 HF_REPO = "ASLP-lab/MeanVC2"
 WAVLM_FINETUNE_GDRIVE_ID = "1-aE1NfzpRCLxA4GUxX9ITI3F9LlbtEGP"
+# Byte-identical mirror of the UniSpeech checkpoint (Google Drive rate-limits CI downloads).
+WAVLM_FINETUNE_HF = ("bezzam/wavlm_large_finetune_seed_tts_eval", "wavlm_large_finetune.pth")
+WAVLM_FINETUNE_SHA256 = "51f07e3b94d9e0262a6a675ef5a087be3dd09e8c62e9d886827f44f82fe7f94b"
 VENDOR = Path(__file__).resolve().parent.parent / "vendor" / "meanvc2"
 
 
