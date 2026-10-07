@@ -27,6 +27,14 @@ const CAST = {
   lucia: { gender: "Femenina", hair: "variant41", body: "variant12", eyes: "variant05", brows: "variant05", lips: "variant03", nose: "variant08" },
   marta: { gender: "Femenina", hair: "variant39", body: "variant05", eyes: "variant04", brows: "variant09", lips: "variant14", nose: "variant12", glasses: "variant08" },
   sofia: { gender: "Femenina", hair: "variant58", body: "variant16", eyes: "variant05", brows: "variant12", lips: "variant22", nose: "variant06" },
+  valeria: { gender: "Femenina", hair: "variant36", body: "variant08", eyes: "variant04", brows: "variant03", lips: "variant14", nose: "variant02" },
+  clara: { gender: "Femenina", hair: "variant46", body: "variant19", eyes: "variant05", brows: "variant07", lips: "variant05", nose: "variant09" },
+  irene: { gender: "Femenina", hair: "variant23", body: "variant03", eyes: "variant04", brows: "variant10", lips: "variant23", nose: "variant04" },
+  noelia: { gender: "Femenina", hair: "variant48", body: "variant23", eyes: "variant05", brows: "variant06", lips: "variant03", nose: "variant11", glasses: "variant08" },
+  mateo: { gender: "Masculina", hair: "variant12", body: "variant10", eyes: "variant05", brows: "variant11", lips: "variant22", nose: "variant13" },
+  rafael: { gender: "Masculina", hair: "variant34", body: "variant02", eyes: "variant04", brows: "variant13", lips: "variant03", nose: "variant07", beard: "variant05" },
+  ivan: { gender: "Masculina", hair: "variant17", body: "variant13", eyes: "variant05", brows: "variant01", lips: "variant14", nose: "variant15" },
+  alvaro: { gender: "Masculina", hair: "variant21", body: "variant07", eyes: "variant04", brows: "variant08", lips: "variant23", nose: "variant16", glasses: "variant11" },
 };
 
 // String metadata of a .vlvoice (a safetensors file): 8-byte header length, then JSON.

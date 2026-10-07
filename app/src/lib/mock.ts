@@ -2,6 +2,7 @@
 import type { Api, LiveStatus, Overview, Settings, VoiceInfo } from "./api";
 
 const VCTK = "VCTK Corpus (CSTR, University of Edinburgh) via kyutai/tts-voices";
+const DONATION = "Unmute Voice Donation Project (Kyutai) via kyutai/tts-voices";
 
 // Fingerprints of the built-in voices, as the backend computes them from their embeddings.
 const REAL_PRINTS: Record<string, number[]> = {
@@ -40,12 +41,20 @@ export function mockApi(): Api {
     ["marta", "Marta", "Femenina · VCTK p333"],
     ["pablo", "Pablo", "Masculina · VCTK p259"],
     ["sofia", "Sofía", "Femenina · VCTK p229"],
-  ].map(([id, name, description]) => ({
+    ["valeria", "Valeria", "Femenina · español · donada", DONATION],
+    ["mateo", "Mateo", "Masculina · español latino · donada", DONATION],
+    ["rafael", "Rafael", "Masculina · grave, acento cubano · donada", DONATION],
+    ["ivan", "Iván", "Masculina · español de Perú · donada", DONATION],
+    ["alvaro", "Álvaro", "Masculina · español de España · donada", DONATION],
+    ["clara", "Clara", "Femenina · inglés · donada", DONATION],
+    ["irene", "Irene", "Femenina · inglés · donada", DONATION],
+    ["noelia", "Noelia", "Femenina · francés", DONATION],
+  ].map(([id, name, description, source = VCTK]) => ({
     id,
     name,
     description,
-    source: VCTK,
-    license: "CC-BY-4.0",
+    source,
+    license: source === VCTK ? "CC-BY-4.0" : "CC0-1.0",
     builtin: true,
     print: print(id),
     portrait: portrait(id),

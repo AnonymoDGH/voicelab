@@ -22,8 +22,10 @@ from voicelab_export.onnx_pipeline import speaker_embedding
 from voicelab_export.speaker import load_wav_16k
 
 VCTK = ("VCTK Corpus (CSTR, University of Edinburgh) via kyutai/tts-voices", "CC-BY-4.0")
+DONATION = ("Unmute Voice Donation Project (Kyutai) via kyutai/tts-voices", "CC0-1.0")
+UNMUTE = ("Kyutai's own recordings for unmute.sh via kyutai/tts-voices", "CC0-1.0")
 VOICES = [
-    # id, file in kyutai/tts-voices, display name, description
+    # id, file in kyutai/tts-voices, display name, description[, (source, license)]
     ("lucia", "vctk/p228_023_enhanced.wav", "Lucía", "Femenina · VCTK p228"),
     ("carlos", "vctk/p254_023_enhanced.wav", "Carlos", "Masculina · VCTK p254"),
     ("elena", "vctk/p244_023_enhanced.wav", "Elena", "Femenina · VCTK p244"),
@@ -32,6 +34,16 @@ VOICES = [
     ("diego", "vctk/p360_023_enhanced.wav", "Diego", "Masculina · VCTK p360"),
     ("sofia", "vctk/p229_023_enhanced.wav", "Sofía", "Femenina · VCTK p229"),
     ("jorge", "vctk/p315_023_enhanced.wav", "Jorge", "Masculina · VCTK p315"),
+    # Volunteers who donated their voice for cloning (CC0); picked for clean audio, Spanish
+    # speakers first. Display names are personas, not the donors' names.
+    ("valeria", "voice-donations/Andrea_enhanced.wav", "Valeria", "Femenina · español · donada", DONATION),
+    ("mateo", "voice-donations/Yesid_enhanced.wav", "Mateo", "Masculina · español latino · donada", DONATION),
+    ("rafael", "voice-donations/Richard_cuban_enhanced.wav", "Rafael", "Masculina · grave, acento cubano · donada", DONATION),
+    ("ivan", "voice-donations/spanish-limaperu_enhanced.wav", "Iván", "Masculina · español de Perú · donada", DONATION),
+    ("alvaro", "voice-donations/Enrique_(Spanish)_enhanced.wav", "Álvaro", "Masculina · español de España · donada", DONATION),
+    ("clara", "voice-donations/Hannah_enhanced.wav", "Clara", "Femenina · inglés · donada", DONATION),
+    ("irene", "voice-donations/Lara_enhanced.wav", "Irene", "Femenina · inglés · donada", DONATION),
+    ("noelia", "unmute-prod-website/developpeuse-3.wav", "Noelia", "Femenina · francés", UNMUTE),
 ]
 
 
@@ -39,15 +51,19 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", default="../../models")
     ap.add_argument("--out", default="../../voices")
+    ap.add_argument("--only", nargs="*", help="voice ids to (re)generate; default all")
     args = ap.parse_args()
     models, out = Path(args.models), Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     spk_file = json.loads((models / "manifest.json").read_text())["speaker"]["file"]
     with tempfile.TemporaryDirectory() as tmp:
-        for vid, path, name, desc in VOICES:
+        for vid, path, name, desc, *origin in VOICES:
+            if args.only and vid not in args.only:
+                continue
+            source, license_ = origin[0] if origin else VCTK
             wav = load_wav_16k(hf_hub_download("kyutai/tts-voices", path, cache_dir=tmp))
             emb = speaker_embedding(models, wav, spk_file).astype(np.float32)
-            meta = {"name": name, "description": desc, "source": f"{VCTK[0]}: {path}", "license": VCTK[1]}
+            meta = {"name": name, "description": desc, "source": f"{source}: {path}", "license": license_}
             save_file({"spk_emb": emb}, str(out / f"{vid}.vlvoice"), metadata=meta)
             print(f"[voice] {vid}.vlvoice  {name} — {desc}")
 
