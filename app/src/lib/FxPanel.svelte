@@ -59,8 +59,8 @@
 <style>
   .fx {
     display: grid;
-    gap: 9px;
-    padding: 11px 12px;
+    gap: 8px;
+    padding: 10px 12px;
     border: 1px solid var(--line);
     border-radius: var(--r-lg);
   }
@@ -79,7 +79,7 @@
     gap: 5px;
   }
   .pad {
-    padding: 7px 2px;
+    padding: 6px 2px;
     font-size: 10px;
     letter-spacing: 0.02em;
     text-align: center;

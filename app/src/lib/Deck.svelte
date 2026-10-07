@@ -133,7 +133,7 @@
   .deck {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     padding: 14px;
     background: var(--surface);
     border-right: 1px solid var(--line);
@@ -144,7 +144,7 @@
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 11px 16px;
+    padding: 9px 16px;
     border-radius: var(--r-lg);
     text-align: left;
     background: var(--surface-2);
