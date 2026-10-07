@@ -1,17 +1,22 @@
 <script lang="ts">
   import type { Api, VoiceInfo } from "./api";
   import Icon from "./Icon.svelte";
+  import Portrait from "./Portrait.svelte";
+  import { portraitFromFile } from "./portrait";
 
   let {
     api,
     modelsReady,
     onCreated,
-  }: { api: Api; modelsReady: boolean; onCreated: (v: VoiceInfo) => void } = $props();
+  }: { api: Api; modelsReady: boolean; onCreated: (v: VoiceInfo, photo: string | null) => void } = $props();
 
   let mode = $state<"file" | "record">("file");
   let file = $state<string | null>(null);
   let name = $state("");
   let description = $state("");
+  /** Optional picture, already cropped and shrunk; saved once the voice exists. */
+  let photo = $state<string | null>(null);
+  let photoPicker: HTMLInputElement;
   let consent = $state(false);
   let seconds = $state(12);
   let busy = $state(false);
@@ -30,6 +35,18 @@
     }
   }
 
+  async function photoPicked() {
+    const f = photoPicker.files?.[0];
+    photoPicker.value = "";
+    if (!f) return;
+    error = null;
+    try {
+      photo = await portraitFromFile(f);
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
   async function create() {
     busy = true;
     error = null;
@@ -43,11 +60,13 @@
         timer = setInterval(() => (countdown = Math.max(0, countdown - 1)), 1000);
         v = await api.recordAndClone(seconds, name, description);
       }
+      const picture = photo;
       name = "";
       description = "";
       file = null;
+      photo = null;
       consent = false;
-      onCreated(v);
+      onCreated(v, picture);
     } catch (e) {
       error = String(e);
     } finally {
@@ -115,6 +134,23 @@
             <input bind:value={name} maxlength="40" placeholder="Nombre de la voz" aria-label="Nombre" />
             <input bind:value={description} maxlength="60" placeholder="Descripción (opcional)" aria-label="Descripción" />
           </div>
+          <div class="photo">
+            <div class="thumb"><Portrait src={photo} name={name} lit={photo !== null} /></div>
+            <div class="photo-text">
+              <span>Foto <span class="opt">(opcional)</span></span>
+              <span class="hint">Para reconocerla de un vistazo.</span>
+            </div>
+            <div class="photo-actions">
+              {#if photo}
+                <button class="small" onclick={() => (photo = null)} disabled={busy}>Quitar</button>
+              {/if}
+              <button class="small" onclick={() => photoPicker.click()} disabled={busy}>
+                <Icon name="image" size={14} />
+                {photo ? "Cambiar" : "Elegir imagen…"}
+              </button>
+            </div>
+            <input class="picker" type="file" accept="image/*" bind:this={photoPicker} onchange={photoPicked} tabindex="-1" aria-hidden="true" />
+          </div>
         </div>
       </div>
 
@@ -152,7 +188,10 @@
         <li>Habla normal: ni susurros ni gritos.</li>
       </ul>
       <span class="label">Privacidad</span>
-      <p>La voz se guarda solo en tu PC como un archivo <span class="mono">.vlvoice</span> de 1 KB. Nada se sube a internet.</p>
+      <p>
+        La voz se guarda solo en tu PC como un archivo <span class="mono">.vlvoice</span> de 1 KB, con su foto si eliges una.
+        Nada se sube a internet.
+      </p>
     </aside>
   </div>
 </section>
@@ -283,6 +322,42 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
+  }
+  .photo {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    padding: 8px 10px 8px 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    background: var(--surface);
+  }
+  .thumb {
+    aspect-ratio: 4 / 3;
+    border-radius: 5px;
+  }
+  .photo-text {
+    display: grid;
+    gap: 2px;
+  }
+  .opt {
+    color: var(--text-3);
+  }
+  .photo-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .small {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .picker {
+    display: none;
   }
   .consent {
     display: flex;

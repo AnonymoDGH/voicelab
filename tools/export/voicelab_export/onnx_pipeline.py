@@ -250,6 +250,57 @@ class OnnxVC:
         return np.concatenate(out) if out else np.zeros(0, dtype=np.float32)
 
 
+# ---------------------------------------------------------------------------
+# Ultra: AP-BWE 16 kHz -> 48 kHz (full utterance; the Rust engine streams it)
+# ---------------------------------------------------------------------------
+
+def stft_center(x: np.ndarray, n_fft: int, hop: int, win: int) -> np.ndarray:
+    """torch.stft(center=True, pad_mode='reflect', hann periodic `win` zero-padded to n_fft)."""
+    window = np.zeros(n_fft)
+    left = (n_fft - win) // 2
+    window[left:left + win] = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(win) / win)
+    xp = np.pad(x.astype(np.float64), n_fft // 2, mode="reflect")
+    T = 1 + len(x) // hop
+    idx = np.arange(n_fft)[None, :] + hop * np.arange(T)[:, None]
+    return np.fft.rfft(xp[idx] * window, axis=1).T  # [bins, T]
+
+
+def istft_center_win(spec: np.ndarray, n_fft: int, hop: int, win: int, length: int) -> np.ndarray:
+    """torch.istft(center=True) with a hann periodic `win` zero-padded to n_fft. spec: [bins, T]."""
+    window = np.zeros(n_fft)
+    left = (n_fft - win) // 2
+    window[left:left + win] = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(win) / win)
+    T = spec.shape[1]
+    frames = np.fft.irfft(spec, n=n_fft, axis=0) * window[:, None]
+    total = n_fft + hop * (T - 1)
+    y = np.zeros(total)
+    env = np.zeros(total)
+    for t in range(T):
+        y[t * hop:t * hop + n_fft] += frames[:, t]
+        env[t * hop:t * hop + n_fft] += window ** 2
+    pad = n_fft // 2
+    y, env = y[pad:pad + length], env[pad:pad + length]
+    return (y / np.maximum(env, 1e-11)).astype(np.float32)
+
+
+class OnnxBwe:
+    def __init__(self, models: Path, threads: int = 2):
+        manifest = json.loads((models / "manifest.json").read_text())
+        self.cfg = manifest["bwe"]
+        self.sess = session(models / self.cfg["file"], threads)
+
+    def process(self, x48: np.ndarray) -> np.ndarray:
+        """48 kHz signal band-limited to 8 kHz -> 48 kHz full band, same length."""
+        c = self.cfg
+        spec = stft_center(x48, c["n_fft"], c["hop"], c["win"])
+        log_amp = np.log(np.abs(spec) + c["log_floor"]).astype(np.float32)[None]
+        pha = np.angle(spec).astype(np.float32)[None]
+        mag, re, im = self.sess.run(None, {"log_amp": log_amp, "pha": pha})
+        norm = np.sqrt(re[0].astype(np.float64) ** 2 + im[0] ** 2)
+        wb = np.exp(mag[0].astype(np.float64)) * (re[0] + 1j * im[0]) / np.maximum(norm, 1e-12)
+        return istft_center_win(wb, c["n_fft"], c["hop"], c["win"], len(x48))
+
+
 def speaker_embedding(models: Path, wav16k: np.ndarray, file: str = "spk_encoder.onnx", threads: int = 4) -> np.ndarray:
     sess = session(models / file, threads)
     return sess.run(None, {"wav": wav16k[None].astype(np.float32)})[0][0]

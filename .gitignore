@@ -20,3 +20,4 @@ app/dist/
 
 # Tauri generated
 app/src-tauri/gen/
+.claude/worktrees/

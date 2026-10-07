@@ -1,6 +1,8 @@
 <script lang="ts">
-  import type { LiveInfo, LiveStatus, Settings, VoiceInfo } from "./api";
+  import type { Effect, LiveInfo, LiveStatus, Settings, VoiceInfo } from "./api";
+  import FxPanel from "./FxPanel.svelte";
   import LedMeter from "./LedMeter.svelte";
+  import Portrait from "./Portrait.svelte";
   import Switch from "./Switch.svelte";
   import VoicePrint from "./VoicePrint.svelte";
 
@@ -15,6 +17,9 @@
     onEnabled,
     onMonitor,
     onMuted,
+    onDenoise,
+    onEffect,
+    onPitch,
   }: {
     running: boolean;
     starting: boolean;
@@ -26,7 +31,12 @@
     onEnabled: (v: boolean) => void;
     onMonitor: (v: boolean) => void;
     onMuted: (v: boolean) => void;
+    onDenoise: (v: boolean) => void;
+    onEffect: (e: Effect) => void;
+    onPitch: (semitones: number, commit: boolean) => void;
   } = $props();
+
+  const modeName = { "40ms": "Rápido", "120ms": "Calidad", ultra: "Ultra" };
 
   const enabled = $derived(live?.enabled ?? true);
   const muted = $derived(live?.muted ?? false);
@@ -60,8 +70,15 @@
         <span class="badge mono" class:off={!enabled}>{enabled ? "IA" : "Original"}</span>
       {/if}
     </div>
-    <div class="voice-name">{voice?.name ?? "Sin voz"}</div>
-    <div class="voice-desc">{voice?.description || "Elige una voz de la biblioteca"}</div>
+    <div class="ident">
+      <div class="pic">
+        <Portrait src={voice?.portrait ?? null} name={voice?.name ?? ""} lit={onAir} />
+      </div>
+      <div class="who">
+        <div class="voice-name">{voice?.name ?? "Sin voz"}</div>
+        <div class="voice-desc">{voice?.description || "Elige una voz de la biblioteca"}</div>
+      </div>
+    </div>
     <div class="print">
       <VoicePrint print={voice?.print ?? []} height={26} lit={onAir} animate={onAir && (stats?.gate_open ?? false)} />
     </div>
@@ -78,7 +95,7 @@
       </div>
       <div>
         <span class="label">Modo</span>
-        <span class="value">{settings.variant === "40ms" ? "Rápido" : "Calidad"}</span>
+        <span class="value">{modeName[settings.variant]}</span>
       </div>
     </div>
   </div>
@@ -104,16 +121,19 @@
 
   <div class="switches">
     <Switch label="Voz IA" hint={hotkey} checked={enabled} disabled={!running} onchange={onEnabled} />
-    <Switch label="Escucharme" hint="por tus auriculares" checked={settings.monitor_enabled} onchange={onMonitor} />
-    <Switch label="Silenciar salida" checked={muted} disabled={!running} onchange={onMuted} />
+    <Switch label="Escucharme" hint="auriculares" checked={settings.monitor_enabled} onchange={onMonitor} />
+    <Switch label="Silenciar" hint="nadie te oye" checked={muted} disabled={!running} onchange={onMuted} />
+    <Switch label="Reducir ruido" hint="de fondo" checked={settings.denoise} onchange={onDenoise} />
   </div>
+
+  <FxPanel effect={settings.effect} pitch={settings.pitch} {onEffect} {onPitch} />
 </aside>
 
 <style>
   .deck {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     padding: 14px;
     background: var(--surface);
     border-right: 1px solid var(--line);
@@ -124,7 +144,7 @@
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 11px 16px;
+    padding: 9px 16px;
     border-radius: var(--r-lg);
     text-align: left;
     background: var(--surface-2);
@@ -205,6 +225,21 @@
     background: transparent;
     color: var(--lcd-text-2);
     border: 1px solid var(--lcd-text-2);
+  }
+  .ident {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    margin-top: 6px;
+  }
+  .pic {
+    aspect-ratio: 4 / 3;
+    border-radius: 7px;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--lcd-text-2) 30%, transparent);
+  }
+  .who {
+    min-width: 0;
   }
   .voice-name {
     font-size: 22px;
@@ -299,7 +334,7 @@
   }
   .switches {
     display: grid;
-    gap: 2px;
-    margin: 0 -4px;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
   }
 </style>

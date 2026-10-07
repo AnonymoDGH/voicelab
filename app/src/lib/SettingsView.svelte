@@ -132,7 +132,7 @@
   <div class="section">
     <div class="side">
       <span class="label">Motor</span>
-      <p>Rápido responde antes; Calidad pronuncia mejor y gasta la mitad de CPU.</p>
+      <p>Rápido responde antes; Calidad pronuncia mejor y gasta la mitad de CPU; Ultra suena a 48 kHz, lo más realista, y pide un procesador más potente.</p>
     </div>
     <div class="fields">
       <div class="modes">
@@ -146,12 +146,17 @@
           <span class="mono mstat">~305 ms · CPU ×1</span>
           <span class="mdesc">PCs justos, grabaciones</span>
         </button>
+        <button class="mode" class:on={s.variant === "ultra"} onclick={() => ((s.variant = "ultra"), (s.threads = Math.max(s.threads, 2)), save())} aria-pressed={s.variant === "ultra"}>
+          <span class="mname">Ultra</span>
+          <span class="mono mstat">~375 ms · CPU ×3</span>
+          <span class="mdesc">48 kHz, lo más realista</span>
+        </button>
       </div>
       <label class="field">
         <span>Hilos de CPU</span>
         <select bind:value={s.threads} onchange={save}>
           {#each [1, 2, 3, 4] as n (n)}
-            <option value={n}>{n}{n === 1 ? " · recomendado" : ""}</option>
+            <option value={n}>{n}{n === (s.variant === "ultra" ? 2 : 1) ? " · recomendado" : ""}</option>
           {/each}
         </select>
       </label>
@@ -189,6 +194,10 @@
         <span>Atajo global · voz IA / tu voz</span>
         <input class="mono" bind:value={s.hotkey} onchange={save} placeholder="CommandOrControl+Alt+V" />
       </label>
+      <label class="check">
+        <input type="checkbox" bind:checked={s.voice_hotkeys} onchange={save} />
+        <span>Cambiar de voz desde cualquier app con <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd></span>
+      </label>
     </div>
   </div>
 
@@ -204,7 +213,7 @@
         <div class="progress"><div style="width:{(100 * progress.done) / Math.max(progress.total, 1)}%"></div></div>
         <span class="mono small">{mb(progress.done)} / {mb(progress.total)} MB · {progress.file}</span>
       {:else}
-        <p class="text2">~700 MB desde <span class="mono">{new URL(overview.model_source).host}</span></p>
+        <p class="text2">~800 MB desde <span class="mono">{new URL(overview.model_source).host}</span></p>
         <button class="signal dl" onclick={download}><Icon name="download" size={15} /> Descargar modelos</button>
       {/if}
       {#if downloadError}
@@ -354,7 +363,7 @@
   }
   .modes {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 10px;
   }
   .mode {

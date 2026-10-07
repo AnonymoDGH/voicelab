@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use voicelab_core::dsp::fx::Effect;
 use voicelab_core::{Variant, paths};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,6 +22,13 @@ pub struct Settings {
     pub hotkey: String,
     /// UI theme id ("auto", "estudio", "papel", "medianoche", "neon", "contraste").
     pub theme: String,
+    /// Noise suppression on the microphone.
+    pub denoise: bool,
+    pub effect: Effect,
+    /// Pitch shift in semitones.
+    pub pitch: f32,
+    /// Ctrl+Alt+1..9 pick the voice in that slot from any app.
+    pub voice_hotkeys: bool,
 }
 
 impl Default for Settings {
@@ -38,6 +46,10 @@ impl Default for Settings {
             output_gain: 1.0,
             hotkey: "CommandOrControl+Alt+V".into(),
             theme: "auto".into(),
+            denoise: false,
+            effect: Effect::None,
+            pitch: 0.0,
+            voice_hotkeys: true,
         }
     }
 }

@@ -2,10 +2,12 @@
 
 mod settings;
 
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
+use base64::prelude::{BASE64_STANDARD, Engine};
 use serde::Serialize;
 use settings::Settings;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -46,6 +48,9 @@ fn apply_controls(c: &Controls, s: &Settings) {
     c.input_gain.store(s.input_gain);
     c.output_gain.store(s.output_gain);
     c.monitor.store(s.monitor_enabled, Ordering::Relaxed);
+    c.denoise.store(s.denoise, Ordering::Relaxed);
+    c.set_effect(s.effect);
+    c.pitch.store(s.pitch);
 }
 
 fn open_models() -> Option<ModelDir> {
@@ -62,23 +67,50 @@ struct VoiceDto {
     license: String,
     builtin: bool,
     print: Vec<f32>,
+    /// The voice's picture as a `data:` URL, ready for an `<img>` (the CSP allows `data:`).
+    portrait: Option<String>,
+    /// The picture is the user's own, so it can be removed.
+    custom_portrait: bool,
 }
 
-fn voices() -> Vec<VoiceDto> {
-    let builtin = paths::builtin_voices_dir();
-    voice::list_voices(&paths::voice_dirs())
-        .into_iter()
-        .map(|v| VoiceDto {
-            builtin: match (&builtin, &v.path) {
-                (Some(b), Some(p)) => p.starts_with(b),
-                _ => false,
-            },
+impl VoiceDto {
+    fn new(v: Voice, builtin: bool, user_dir: &Path) -> Self {
+        let portrait = v.portrait(user_dir);
+        Self {
+            builtin,
             print: v.fingerprint(),
+            custom_portrait: portrait.as_ref().is_some_and(|p| p.custom),
+            portrait: portrait.and_then(|p| data_url(&p.path)),
             id: v.id,
             name: v.name,
             description: v.description,
             source: v.source,
             license: v.license,
+        }
+    }
+}
+
+/// A portrait file as a `data:` URL; `None` if unreadable or too big to be a thumbnail.
+fn data_url(path: &Path) -> Option<String> {
+    let ext = path.extension()?.to_str()?;
+    let (_, mime) = voice::PORTRAIT_TYPES.iter().find(|(e, _)| e.eq_ignore_ascii_case(ext))?;
+    let mut bytes = Vec::new();
+    std::fs::File::open(path).ok()?.take(voice::PORTRAIT_MAX_BYTES + 1).read_to_end(&mut bytes).ok()?;
+    (bytes.len() as u64 <= voice::PORTRAIT_MAX_BYTES)
+        .then(|| format!("data:{mime};base64,{}", BASE64_STANDARD.encode(bytes)))
+}
+
+fn voices() -> Vec<VoiceDto> {
+    let builtin = paths::builtin_voices_dir();
+    let user_dir = paths::user_voices_dir();
+    voice::list_voices(&paths::voice_dirs())
+        .into_iter()
+        .map(|v| {
+            let is_builtin = match (&builtin, &v.path) {
+                (Some(b), Some(p)) => p.starts_with(b),
+                _ => false,
+            };
+            VoiceDto::new(v, is_builtin, &user_dir)
         })
         .collect()
 }
@@ -191,6 +223,10 @@ fn stop_engine(state: State<'_, AppState>) {
 
 #[tauri::command]
 fn set_voice(state: State<'_, AppState>, id: String) -> CmdResult<()> {
+    switch_voice(&state, id)
+}
+
+fn switch_voice(state: &AppState, id: String) -> CmdResult<()> {
     let voice = find_voice(&id)?;
     let mut inner = state.lock();
     if let Some(engine) = &inner.engine {
@@ -199,6 +235,12 @@ fn set_voice(state: State<'_, AppState>, id: String) -> CmdResult<()> {
     inner.settings.voice = Some(id);
     inner.settings.save();
     Ok(())
+}
+
+/// Voices in the order the UI numbers them: your own first, then the included ones.
+fn slot_order() -> Vec<VoiceDto> {
+    let (mine, builtin): (Vec<_>, Vec<_>) = voices().into_iter().partition(|v| !v.builtin);
+    mine.into_iter().chain(builtin).collect()
 }
 
 #[tauri::command]
@@ -231,12 +273,12 @@ async fn update_settings(app: AppHandle, settings: Settings) -> CmdResult<()> {
             || old.monitor != settings.monitor
             || old.variant != settings.variant
             || old.threads != settings.threads;
-        let hotkey_changed = old.hotkey != settings.hotkey;
+        let hotkey_changed = old.hotkey != settings.hotkey || old.voice_hotkeys != settings.voice_hotkeys;
         apply_controls(&state.controls, &settings);
         settings.save();
         inner.settings = settings.clone();
         if hotkey_changed {
-            register_hotkey(&app, &settings.hotkey);
+            register_hotkeys(&app, &settings);
         }
         needs_restart && inner.engine.is_some()
     };
@@ -256,24 +298,19 @@ fn save_cloned(models: &ModelDir, wav16k: &[f32], name: &str, description: &str,
     v.description = description.trim().to_string();
     v.source = source.to_string();
     v.license = "propia".into();
+    // Ids are unique across all voices, built-in ones included: pictures are matched by id.
+    let taken: Vec<String> = voice::list_voices(&paths::voice_dirs()).into_iter().map(|v| v.id).collect();
     let dir = paths::user_voices_dir();
     let mut path = dir.join(format!("{}.{}", v.id, voice::EXTENSION));
     let mut n = 2;
-    while path.exists() {
+    while path.exists() || taken.contains(&v.id) {
         v.id = format!("{}-{n}", voice::slug(name));
         path = dir.join(format!("{}.{}", v.id, voice::EXTENSION));
         n += 1;
     }
     v.save(&path).map_err(err)?;
-    Ok(VoiceDto {
-        print: v.fingerprint(),
-        id: v.id,
-        name: v.name,
-        description: v.description,
-        source: v.source,
-        license: v.license,
-        builtin: false,
-    })
+    v.path = Some(path);
+    Ok(VoiceDto::new(v, false, &dir))
 }
 
 fn models_of(app: &AppHandle) -> CmdResult<ModelDir> {
@@ -309,9 +346,12 @@ async fn record_and_clone(app: AppHandle, seconds: f32, name: String, descriptio
 fn delete_voice(state: State<'_, AppState>, id: String) -> CmdResult<()> {
     let v = find_voice(&id)?;
     let path = v.path.ok_or("voz sin archivo")?;
-    if !path.starts_with(paths::user_voices_dir()) {
+    let user_dir = paths::user_voices_dir();
+    if !path.starts_with(&user_dir) {
         return Err("las voces incluidas no se pueden borrar".into());
     }
+    // Picture first: if anything fails, the voice is still there.
+    voice::clear_portrait(&user_dir, &v.id).map_err(err)?;
     std::fs::remove_file(path).map_err(err)?;
     let mut inner = state.lock();
     if inner.settings.voice.as_deref() == Some(id.as_str()) {
@@ -319,6 +359,26 @@ fn delete_voice(state: State<'_, AppState>, id: String) -> CmdResult<()> {
         inner.settings.save();
     }
     Ok(())
+}
+
+/// Gives a voice the user's own picture, sent as a `data:image/…;base64,…` URL (the UI crops
+/// and shrinks it first). It replaces the built-in illustration until removed.
+#[tauri::command]
+fn set_voice_portrait(id: String, data_url: String) -> CmdResult<()> {
+    let v = find_voice(&id)?;
+    let (mime, data) =
+        data_url.strip_prefix("data:").and_then(|s| s.split_once(";base64,")).ok_or("la imagen no es válida")?;
+    let (ext, _) = voice::PORTRAIT_TYPES.iter().find(|(_, m)| *m == mime).ok_or("formato de imagen no admitido")?;
+    let bytes = BASE64_STANDARD.decode(data).map_err(|_| "la imagen no es válida")?;
+    voice::set_portrait(&paths::user_voices_dir(), &v.id, &bytes, ext).map_err(err)?;
+    Ok(())
+}
+
+/// Removes the user's own picture of a voice (built-in voices get their illustration back).
+#[tauri::command]
+fn clear_voice_portrait(id: String) -> CmdResult<()> {
+    let v = find_voice(&id)?;
+    voice::clear_portrait(&paths::user_voices_dir(), &v.id).map_err(err)
 }
 
 #[derive(Clone, Serialize)]
@@ -351,10 +411,10 @@ async fn download_models(app: AppHandle) -> CmdResult<()> {
     .map_err(err)?
 }
 
-fn register_hotkey(app: &AppHandle, hotkey: &str) {
+fn register_hotkeys(app: &AppHandle, settings: &Settings) {
     let gs = app.global_shortcut();
     let _ = gs.unregister_all();
-    let _ = gs.on_shortcut(hotkey, |app, _shortcut, event| {
+    let _ = gs.on_shortcut(settings.hotkey.as_str(), |app, _shortcut, event| {
         if event.state() == ShortcutState::Pressed {
             let c = &app.state::<AppState>().controls;
             let enabled = !c.enabled.load(Ordering::Relaxed);
@@ -362,13 +422,27 @@ fn register_hotkey(app: &AppHandle, hotkey: &str) {
             let _ = app.emit("enabled-changed", enabled);
         }
     });
+    if settings.voice_hotkeys {
+        for n in 1..=9usize {
+            let _ = gs.on_shortcut(format!("CommandOrControl+Alt+{n}").as_str(), move |app, _shortcut, event| {
+                if event.state() != ShortcutState::Pressed {
+                    return;
+                }
+                if let Some(v) = slot_order().into_iter().nth(n - 1)
+                    && switch_voice(&app.state::<AppState>(), v.id.clone()).is_ok()
+                {
+                    let _ = app.emit("voice-changed", v.id);
+                }
+            });
+        }
+    }
 }
 
 pub fn run() {
     let settings = Settings::load();
     let controls = Arc::new(Controls::default());
     apply_controls(&controls, &settings);
-    let hotkey = settings.hotkey.clone();
+    let hotkey_settings = settings.clone();
     let state = AppState { inner: Mutex::new(Inner { settings, engine: None, models: open_models() }), controls };
 
     tauri::Builder::default()
@@ -377,7 +451,7 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(state)
         .setup(move |app| {
-            register_hotkey(app.handle(), &hotkey);
+            register_hotkeys(app.handle(), &hotkey_settings);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -391,6 +465,8 @@ pub fn run() {
             clone_voice_file,
             record_and_clone,
             delete_voice,
+            set_voice_portrait,
+            clear_voice_portrait,
             download_models,
         ])
         .run(tauri::generate_context!())

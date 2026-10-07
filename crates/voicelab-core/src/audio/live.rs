@@ -22,10 +22,16 @@ use rtrb::{Consumer, Producer, RingBuffer};
 use super::devices::{self, Direction};
 use super::processor::{Controls, Processor, Stats, StatsSnapshot};
 use crate::engine::vc::{SAMPLE_RATE, StreamingVc};
-use crate::engine::{ModelDir, Variant};
+use crate::engine::{Bwe, ModelDir, Variant};
 
-/// Extra output buffering on top of one block, to absorb processing jitter.
+/// Extra output buffering on top of one block, to absorb processing jitter. Ultra's longer
+/// compute varies more. The output trims what it does not need during silences.
 const SAFETY_MARGIN_MS: u32 = 40;
+const SAFETY_MARGIN_ULTRA_MS: u32 = 60;
+/// Smallest cushion the adaptive trim keeps; grows after each underrun.
+const MIN_CUSHION_MS: u32 = 12;
+/// How long the buffer level is observed before trimming.
+const TRIM_WINDOW_S: u32 = 3;
 const RING_SECONDS: u32 = 2;
 
 #[derive(Debug, Clone, Default)]
@@ -81,8 +87,12 @@ struct HostReady {
 impl LiveEngine {
     pub fn start(models: &ModelDir, cfg: LiveConfig, voice: &[f32], controls: Arc<Controls>) -> Result<Self> {
         let variant = cfg.variant.unwrap_or(Variant::LowLatency);
-        let mut vc = StreamingVc::new(models, variant, cfg.threads.max(1))?;
+        // Ultra needs the parallelism: 4 flow steps plus the 48 kHz extension per block.
+        let threads = if variant.uses_bwe() { cfg.threads.max(2) } else { cfg.threads.max(1) };
+        let mut vc = StreamingVc::new(models, variant, threads)?;
         vc.set_speaker(voice)?;
+        let bwe = if variant.uses_bwe() { Some(Bwe::new(models, threads)?) } else { None };
+        let margin_ms = if variant.uses_bwe() { SAFETY_MARGIN_ULTRA_MS } else { SAFETY_MARGIN_MS };
         let block = vc.block_samples();
         let model_latency = vc.algorithmic_latency_samples();
 
@@ -100,16 +110,17 @@ impl LiveEngine {
                 (stop.clone(), stats.clone(), controls.clone(), last_error.clone());
             let (input, monitor) = (cfg.input.clone(), cfg.monitor.clone());
             std::thread::Builder::new().name("voicelab-audio-host".into()).spawn(move || {
-                let streams = match open_streams(input, output, monitor, block, &controls, &stats, &last_error) {
-                    Ok((streams, ready)) => {
-                        let _ = ready_tx.send(Ok(ready));
-                        streams
-                    }
-                    Err(e) => {
-                        let _ = ready_tx.send(Err(e));
-                        return;
-                    }
-                };
+                let streams =
+                    match open_streams(input, output, monitor, (block, margin_ms), &controls, &stats, &last_error) {
+                        Ok((streams, ready)) => {
+                            let _ = ready_tx.send(Ok(ready));
+                            streams
+                        }
+                        Err(e) => {
+                            let _ = ready_tx.send(Err(e));
+                            return;
+                        }
+                    };
                 for s in &streams {
                     if let Err(e) = s.play() {
                         *last_error.lock().unwrap() = Some(format!("no se pudo iniciar el audio: {e}"));
@@ -123,7 +134,8 @@ impl LiveEngine {
         };
         let ready = ready_rx.recv().map_err(|_| anyhow!("el hilo de audio terminó inesperadamente"))??;
 
-        let processor = Processor::new(vc, ready.input_rate, &ready.sink_rates, controls.clone(), stats.clone())?;
+        let processor = Processor::new(vc, bwe, ready.input_rate, &ready.sink_rates, controls.clone(), stats.clone())?;
+        let post_latency_ms = processor.post_latency_ms();
         let (cmd_tx, cmd_rx) = mpsc::channel();
         let worker = {
             let (stop, stats, controls, last_error) =
@@ -146,7 +158,7 @@ impl LiveEngine {
             input_rate: ready.input_rate,
             output_rate: ready.sink_rates[0],
             block_ms: ms(block),
-            latency_ms: ms(model_latency) + SAFETY_MARGIN_MS as f32,
+            latency_ms: ms(model_latency) + post_latency_ms + margin_ms as f32,
         };
         Ok(Self { info, controls, stats, commands: cmd_tx, stop, last_error, threads: vec![host, worker] })
     }
@@ -256,7 +268,7 @@ fn open_streams(
     input: Option<String>,
     output: Option<String>,
     monitor: Option<String>,
-    block16k: usize,
+    (block16k, margin_ms): (usize, u32),
     controls: &Arc<Controls>,
     stats: &Arc<Stats>,
     last_error: &Arc<Mutex<Option<String>>>,
@@ -277,17 +289,8 @@ fn open_streams(
         let rate = cfg.sample_rate();
         let (prod, cons) = RingBuffer::new((rate * RING_SECONDS) as usize);
         let block = (block16k as u64 * rate as u64 / SAMPLE_RATE as u64) as usize;
-        let start = block + (rate * SAFETY_MARGIN_MS / 1000) as usize;
-        let state = OutputState {
-            ring: cons,
-            priming: true,
-            start,
-            high: start + block + (rate / 20) as usize,
-            channels: cfg.channels() as usize,
-            rate,
-            main: i == 0,
-            stats: stats.clone(),
-        };
+        let start = block + (rate * margin_ms / 1000) as usize;
+        let state = OutputState::new(cons, start, block, cfg.channels() as usize, rate, i == 0, stats.clone());
         streams.push(build_output(&dev, cfg.sample_format(), cfg.into(), state, stats, last_error)?);
         sink_rates.push(rate);
         sinks.push(prod);
@@ -386,9 +389,44 @@ struct OutputState {
     rate: u32,
     main: bool,
     stats: Arc<Stats>,
+    /// Adaptive latency: the lowest buffer level seen in the current window, the cushion to
+    /// keep, and how many samples are still to be dropped. Only silent samples are dropped, so
+    /// trimming is inaudible; it happens between phrases.
+    floor: usize,
+    window_left: usize,
+    cushion: usize,
+    trim: usize,
 }
 
+/// Samples quieter than this count as silence (the gate outputs exact zeros).
+const SILENCE: f32 = 1e-4;
+
 impl OutputState {
+    fn new(
+        ring: Consumer<f32>,
+        start: usize,
+        block: usize,
+        channels: usize,
+        rate: u32,
+        main: bool,
+        stats: Arc<Stats>,
+    ) -> Self {
+        Self {
+            ring,
+            priming: true,
+            start,
+            high: start + block + (rate / 20) as usize,
+            channels,
+            rate,
+            main,
+            stats,
+            floor: usize::MAX,
+            window_left: (rate * TRIM_WINDOW_S) as usize,
+            cushion: (rate * MIN_CUSHION_MS / 1000) as usize,
+            trim: 0,
+        }
+    }
+
     fn fill<T: Sample + FromSample<f32>>(&mut self, data: &mut [T]) {
         let frames = data.len() / self.channels;
         let mut avail = self.ring.slots();
@@ -398,6 +436,8 @@ impl OutputState {
                 return;
             }
             self.priming = false;
+            self.floor = usize::MAX;
+            self.window_left = (self.rate * TRIM_WINDOW_S) as usize;
         }
         if avail > self.high {
             // Input clock faster than output clock: drop the excess to keep latency bounded.
@@ -407,23 +447,49 @@ impl OutputState {
             }
             avail = self.ring.slots();
         }
-        let n = frames.min(avail);
-        if let Ok(chunk) = self.ring.read_chunk(n) {
+        // Read up to one extra callback's worth when trimming; silent samples are skipped as
+        // long as enough remain to fill this callback.
+        let take = (frames + self.trim.min(frames)).min(avail);
+        let mut used = 0;
+        let mut written = 0;
+        if let Ok(chunk) = self.ring.read_chunk(take) {
             let (a, b) = chunk.as_slices();
-            for (frame, &v) in data.chunks_exact_mut(self.channels).zip(a.iter().chain(b)) {
+            let mut samples = a.iter().chain(b);
+            for frame in data.chunks_exact_mut(self.channels) {
+                let Some(mut v) = samples.next().copied() else { break };
+                used += 1;
+                while self.trim > 0 && v.abs() < SILENCE && take - used >= frames - written {
+                    let Some(next) = samples.next().copied() else { break };
+                    used += 1;
+                    self.trim -= 1;
+                    v = next;
+                }
                 frame.fill(T::from_sample(v));
+                written += 1;
             }
-            chunk.commit_all();
+            chunk.commit(used);
         }
-        if n < frames {
-            data[n * self.channels..].fill(T::EQUILIBRIUM);
+        if written < frames {
+            data[written * self.channels..].fill(T::EQUILIBRIUM);
             self.priming = true;
+            // The cushion was too thin for this machine: keep more from now on.
+            self.cushion = (self.cushion + (self.rate / 100) as usize).min((self.rate / 10) as usize);
+            self.trim = 0;
             if self.main {
                 self.stats.underruns.fetch_add(1, Ordering::Relaxed);
             }
         }
+        let level = avail - used;
+        self.floor = self.floor.min(level);
+        self.window_left = self.window_left.saturating_sub(frames);
+        if self.window_left == 0 {
+            // Never needed more than `cushion` of what was buffered: drop the rest when quiet.
+            self.trim = self.floor.saturating_sub(self.cushion);
+            self.floor = usize::MAX;
+            self.window_left = (self.rate * TRIM_WINDOW_S) as usize;
+        }
         if self.main {
-            self.stats.output_buffer_ms.store((avail - n) as f32 * 1000.0 / self.rate as f32);
+            self.stats.output_buffer_ms.store(level as f32 * 1000.0 / self.rate as f32);
         }
     }
 }
@@ -467,30 +533,29 @@ mod tests {
     /// (positive) or slower (negative) than the output clock; the worker emits one 80 ms block
     /// whenever enough input has arrived. Returns (underruns after priming, max ring level).
     fn simulate(drift: f64) -> (u64, usize) {
+        let (underruns, max_level, _) = simulate_with(drift, 0.5);
+        (underruns, max_level)
+    }
+
+    /// Like `simulate` with a constant signal `value`; also returns the lowest buffer level over
+    /// the last 5 seconds.
+    fn simulate_with(drift: f64, value: f32) -> (u64, usize, usize) {
         let rate = 48000u32;
         let block = 3840usize; // 80 ms
         let start = block + (rate * SAFETY_MARGIN_MS / 1000) as usize;
         let stats = Arc::new(Stats::default());
         let (mut prod, cons) = RingBuffer::<f32>::new((rate * RING_SECONDS) as usize);
-        let mut out = OutputState {
-            ring: cons,
-            priming: true,
-            start,
-            high: start + block + (rate / 20) as usize,
-            channels: 2,
-            rate,
-            main: true,
-            stats: stats.clone(),
-        };
+        let mut out = OutputState::new(cons, start, block, 2, rate, true, stats.clone());
         let mut data = vec![0.0f32; 480 * 2];
         let mut input_acc = 0.0f64;
         let mut max_level = 0;
         let mut first_underruns = None;
-        for _ in 0..60_000 {
+        let mut late_floor = usize::MAX;
+        for tick in 0..60_000 {
             input_acc += 480.0 * (1.0 + drift);
             while input_acc >= block as f64 {
                 for _ in 0..block {
-                    let _ = prod.push(0.5);
+                    let _ = prod.push(value);
                 }
                 input_acc -= block as f64;
             }
@@ -499,8 +564,26 @@ mod tests {
                 first_underruns = Some(stats.underruns.load(Ordering::Relaxed));
             }
             max_level = max_level.max(out.ring.slots());
+            if tick >= 59_500 {
+                late_floor = late_floor.min(out.ring.slots());
+            }
         }
-        (stats.underruns.load(Ordering::Relaxed) - first_underruns.unwrap_or(0), max_level)
+        (stats.underruns.load(Ordering::Relaxed) - first_underruns.unwrap_or(0), max_level, late_floor)
+    }
+
+    /// In silence the output drops what the margin does not need, down to the cushion, and
+    /// never underruns doing so; with sound it never drops anything.
+    #[test]
+    fn silence_trims_latency_to_the_cushion() {
+        let rate = 48000usize;
+        let margin = rate * SAFETY_MARGIN_MS as usize / 1000;
+        let cushion = rate * MIN_CUSHION_MS as usize / 1000;
+        let (underruns, _, floor) = simulate_with(0.0, 0.0);
+        assert_eq!(underruns, 0);
+        assert!(floor <= cushion + 480, "floor {floor} > cushion {cushion}");
+        let (underruns, _, floor) = simulate_with(0.0, 0.5);
+        assert_eq!(underruns, 0);
+        assert!(floor >= margin - 480, "floor {floor} trimmed below the margin {margin} with sound");
     }
 
     #[test]

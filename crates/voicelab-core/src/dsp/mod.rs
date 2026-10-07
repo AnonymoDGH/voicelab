@@ -1,4 +1,5 @@
 pub mod fbank;
+pub mod fx;
 pub mod gate;
 pub mod istft;
 pub mod resample;

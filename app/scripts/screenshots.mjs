@@ -20,7 +20,7 @@ const base = "http://localhost:5174";
 const browser = await chromium.launch();
 const errors = [];
 
-async function page(path, { scale = 1, width = 1200, height = 760 } = {}) {
+async function page(path, { scale = 1, width = 1200, height = 800 } = {}) {
   const p = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: scale });
   p.on("pageerror", (e) => errors.push(`${path}: ${e}`));
   await p.goto(base + path);

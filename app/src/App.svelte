@@ -7,6 +7,7 @@
   import SettingsView from "./lib/SettingsView.svelte";
   import StatusBar from "./lib/StatusBar.svelte";
   import Voices from "./lib/Voices.svelte";
+  import { portraitFromFile } from "./lib/portrait";
   import { applyTheme } from "./theme";
 
   type View = "voices" | "clone" | "settings";
@@ -50,7 +51,13 @@
       await refresh();
       applyTheme(ov!.settings.theme);
       if (!ov!.models_ready) view = "settings";
-      unlisten = await api.onEnabledChanged(() => poll());
+      const offEnabled = await api.onEnabledChanged(() => poll());
+      const offVoice = await api.onVoiceChanged((id) => {
+        ov!.settings.voice = id;
+        const v = ov!.voices.find((x) => x.id === id);
+        if (v) notify(`Ahora suenas como ${v.name}`);
+      });
+      unlisten = () => (offEnabled(), offVoice());
       const loop = async () => {
         if (stop) return;
         await poll();
@@ -110,17 +117,39 @@
     }
   }
 
+  async function setPortrait(v: VoiceInfo, file: File | null) {
+    try {
+      if (file) await api!.setVoicePortrait(v.id, await portraitFromFile(file));
+      else await api!.clearVoicePortrait(v.id);
+      await refresh();
+    } catch (e) {
+      notify(e instanceof Error ? e.message : String(e), true);
+    }
+  }
+
   async function saveSettings(s: Settings) {
     await api!.updateSettings(s);
     ov!.settings = s;
     if (running) info = (await api!.overview()).info;
   }
 
-  async function voiceCreated(v: VoiceInfo) {
+  // Effects apply live; the slider saves on release, not on every step.
+  let fxTimer: ReturnType<typeof setTimeout> | undefined;
+  function setFx(patch: Partial<Settings>, commit = true) {
+    const s = { ...ov!.settings, ...patch };
+    ov!.settings = s;
+    clearTimeout(fxTimer);
+    fxTimer = setTimeout(() => api!.updateSettings(s), commit ? 0 : 60);
+  }
+
+  async function voiceCreated(v: VoiceInfo, photo: string | null) {
+    // The voice exists already: if its picture fails to save, it can be set again from its tile.
+    const photoError = photo ? await api!.setVoicePortrait(v.id, photo).then(() => null, String) : null;
     await refresh();
     await selectVoice(v.id);
     view = "voices";
-    notify(`Voz «${v.name}» creada`);
+    if (photoError) notify(`Voz «${v.name}» creada, pero no se guardó la foto: ${photoError}`, true);
+    else notify(`Voz «${v.name}» creada`);
   }
 
   async function setFlag(flags: { enabled?: boolean; muted?: boolean; monitor?: boolean }) {
@@ -165,13 +194,16 @@
         onEnabled={(v) => setFlag({ enabled: v })}
         onMonitor={(v) => setFlag({ monitor: v })}
         onMuted={(v) => setFlag({ muted: v })}
+        onDenoise={(v) => setFx({ denoise: v })}
+        onEffect={(e) => setFx({ effect: e })}
+        onPitch={(p, commit) => setFx({ pitch: p }, commit)}
       />
 
       <main>
         {#if !ov.models_ready && view !== "settings"}
           <div class="banner">
             <Icon name="download" size={15} />
-            <span>Falta descargar los modelos de IA (una sola vez, ~700 MB).</span>
+            <span>Falta descargar los modelos de IA (una sola vez, ~800 MB).</span>
             <button onclick={() => (view = "settings")}>Ir a Ajustes</button>
           </div>
         {:else if !ov.virtual_cable && view === "voices"}
@@ -183,7 +215,15 @@
         {/if}
 
         {#if view === "voices"}
-          <Voices voices={ov.voices} selected={ov.settings.voice} live={running} onSelect={selectVoice} onDelete={deleteVoice} onClone={() => (view = "clone")} />
+          <Voices
+            voices={ov.voices}
+            selected={ov.settings.voice}
+            live={running}
+            onSelect={selectVoice}
+            onDelete={deleteVoice}
+            onPortrait={setPortrait}
+            onClone={() => (view = "clone")}
+          />
         {:else if view === "clone"}
           <Clone {api} modelsReady={ov.models_ready} onCreated={voiceCreated} />
         {:else}

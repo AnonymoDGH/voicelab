@@ -1,4 +1,4 @@
-"""Download the MeanVC2 checkpoints and the WavLM speaker checkpoint into ./ckpts."""
+"""Download the MeanVC2, WavLM speaker and AP-BWE checkpoints into ./ckpts."""
 
 from __future__ import annotations
 
@@ -9,6 +9,10 @@ from pathlib import Path
 from huggingface_hub import hf_hub_download
 
 from voicelab_export.paths import (
+    BWE_FILE,
+    BWE_GDRIVE_ID,
+    BWE_HF,
+    BWE_SHA256,
     HF_REPO,
     SPEAKER_FILE,
     VARIANTS,
@@ -28,6 +32,21 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def fetch_verified(dst: Path, hf: tuple[str, str], gdrive_id: str, digest: str) -> None:
+    if not dst.exists():
+        try:
+            print(f"[hf] {dst.name} (mirror)")
+            shutil.copy(hf_hub_download(*hf), dst)
+        except Exception as e:  # fall back to the original Google Drive upload
+            import gdown
+
+            print(f"[gdrive] {dst.name} ({e.__class__.__name__} on mirror)")
+            gdown.download(id=gdrive_id, output=str(dst))
+    if sha256(dst) != digest:
+        dst.unlink()
+        raise SystemExit(f"{dst.name}: SHA-256 mismatch, deleted; run again")
+
+
 def main() -> None:
     out = ckpt_dir()
     out.mkdir(parents=True, exist_ok=True)
@@ -42,19 +61,8 @@ def main() -> None:
         print(f"[hf] {name}")
         shutil.copy(hf_hub_download(HF_REPO, name), dst)
 
-    spk = out / SPEAKER_FILE
-    if not spk.exists():
-        try:
-            print(f"[hf] {SPEAKER_FILE} (mirror)")
-            shutil.copy(hf_hub_download(*WAVLM_FINETUNE_HF), spk)
-        except Exception as e:  # fall back to the original Google Drive upload
-            import gdown
-
-            print(f"[gdrive] {SPEAKER_FILE} ({e.__class__.__name__} on mirror)")
-            gdown.download(id=WAVLM_FINETUNE_GDRIVE_ID, output=str(spk))
-    if sha256(spk) != WAVLM_FINETUNE_SHA256:
-        spk.unlink()
-        raise SystemExit(f"{SPEAKER_FILE}: SHA-256 mismatch, deleted; run again")
+    fetch_verified(out / SPEAKER_FILE, WAVLM_FINETUNE_HF, WAVLM_FINETUNE_GDRIVE_ID, WAVLM_FINETUNE_SHA256)
+    fetch_verified(out / BWE_FILE, BWE_HF, BWE_GDRIVE_ID, BWE_SHA256)
     print("ok")
 
 

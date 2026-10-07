@@ -14,5 +14,13 @@ It builds on the following third-party work (details and licenses in THIRD_PARTY
 - VCTK Corpus (Centre for Speech Technology Research, University of Edinburgh),
   clips distributed via kyutai/tts-voices — reference audio for the built-in voices.
   Creative Commons Attribution 4.0 International.
+- Unmute Voice Donation Project and Kyutai's own unmute.sh recordings, via kyutai/tts-voices —
+  reference audio for the donated built-in voices. CC0 1.0 Universal.
+- AP-BWE (Ye-Xin Lu) — 16 kHz to 48 kHz bandwidth extension used by Ultra mode. MIT License,
+  Copyright (c) 2023 Ye-Xin Lu.
+- RNNoise (Xiph.Org, Jean-Marc Valin) via the nnnoiseless Rust port — microphone noise
+  suppression. BSD 3-Clause License.
+- Notionists illustrations by Zoish — portraits of the built-in voices (fictional
+  characters, generated with DiceBear). CC0 1.0 Universal (public domain dedication).
 - Geist and Geist Mono typefaces (Vercel). SIL Open Font License 1.1.
 - Design inspiration for a CPU-first, voice-state-file workflow: pocket-tts (Kyutai), MIT License.

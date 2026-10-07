@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { VoiceInfo } from "./api";
   import Icon from "./Icon.svelte";
-  import VoicePrint from "./VoicePrint.svelte";
+  import Portrait from "./Portrait.svelte";
 
   let {
     voices,
@@ -9,6 +9,7 @@
     live,
     onSelect,
     onDelete,
+    onPortrait,
     onClone,
   }: {
     voices: VoiceInfo[];
@@ -16,6 +17,8 @@
     live: boolean;
     onSelect: (id: string) => void;
     onDelete: (v: VoiceInfo) => void;
+    /** A picked image file to use as the voice's picture, or null to remove the user's own. */
+    onPortrait: (v: VoiceInfo, file: File | null) => void;
     onClone: () => void;
   } = $props();
 
@@ -35,10 +38,29 @@
 
   // Keys 1–9 pick the voice in that slot (when not typing in a field).
   function onKey(e: KeyboardEvent) {
+    if (e.key === "Escape") menu = null;
     const t = e.target as HTMLElement;
     if (t.tagName === "INPUT" || t.tagName === "SELECT" || e.ctrlKey || e.altKey || e.metaKey) return;
     const n = Number(e.key);
     if (n >= 1 && n <= 9 && ordered[n - 1]) onSelect(ordered[n - 1].id);
+  }
+
+  // Picture menu of one tile, and the hidden file input it opens.
+  let menu = $state<string | null>(null);
+  let picker: HTMLInputElement;
+  let pickingFor: VoiceInfo | null = null;
+
+  function choosePhoto(v: VoiceInfo) {
+    menu = null;
+    pickingFor = v;
+    picker.value = "";
+    picker.click();
+  }
+
+  function picked() {
+    const file = picker.files?.[0];
+    if (file && pickingFor) onPortrait(pickingFor, file);
+    pickingFor = null;
   }
 
   const filters: [Filter, string][] = [
@@ -48,7 +70,9 @@
   ];
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window onkeydown={onKey} onclick={() => (menu = null)} />
+
+<input class="picker" type="file" accept="image/*" bind:this={picker} onchange={picked} tabindex="-1" aria-hidden="true" />
 
 <section class="page">
   <header class="head">
@@ -79,18 +103,53 @@
         tabindex="0"
         aria-pressed={active}
         onclick={() => onSelect(v.id)}
-        onkeydown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onSelect(v.id))}
+        onkeydown={(e) =>
+          e.target === e.currentTarget && (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onSelect(v.id))}
         title={v.source ? `Origen: ${v.source}${v.license ? ` · ${v.license}` : ""}` : v.name}
       >
-        <div class="tile-head">
+        <div class="screen">
+          <Portrait src={v.portrait} name={v.name} lit={active} />
           <span class="slot mono">{String(slot).padStart(2, "0")}</span>
           {#if active}
             <span class="tag on mono">{live ? "En uso" : "Elegida"}</span>
           {:else if !v.builtin}
             <span class="tag mono">Tuya</span>
           {/if}
+          <button
+            class="photo"
+            class:open={menu === v.id}
+            aria-label="Foto de {v.name}"
+            aria-haspopup="menu"
+            aria-expanded={menu === v.id}
+            title="Cambiar foto"
+            onclick={(e) => {
+              e.stopPropagation();
+              menu = menu === v.id ? null : v.id;
+            }}
+          >
+            <Icon name="camera" size={14} />
+          </button>
+          {#if menu === v.id}
+            <!-- Its items are buttons; the click handler only keeps clicks from reaching the tile. -->
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <div class="menu" role="menu" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+              <button role="menuitem" onclick={() => choosePhoto(v)}>
+                <Icon name="image" size={14} /> Cambiar foto…
+              </button>
+              {#if v.custom_portrait}
+                <button
+                  role="menuitem"
+                  onclick={() => {
+                    menu = null;
+                    onPortrait(v, null);
+                  }}
+                >
+                  <Icon name="close" size={14} /> Quitar foto
+                </button>
+              {/if}
+            </div>
+          {/if}
         </div>
-        <VoicePrint print={v.print} height={34} lit={active} />
         <div class="tile-foot">
           <div class="name">{v.name}</div>
           <div class="desc">{v.description || (v.builtin ? "Voz incluida" : "Voz clonada")}</div>
@@ -113,9 +172,11 @@
 
     {#if filter !== "builtin" && !query}
       <button class="tile new" onclick={onClone}>
-        <span class="plus"><Icon name="plus" size={18} /></span>
-        <span class="name">Clonar una voz</span>
-        <span class="desc">Desde un audio o grabándote</span>
+        <span class="screen"><span class="plus"><Icon name="plus" size={18} /></span></span>
+        <span class="tile-foot">
+          <span class="name">Clonar una voz</span>
+          <span class="desc">Desde un audio o grabándote</span>
+        </span>
       </button>
     {/if}
   </div>
@@ -199,8 +260,9 @@
   .tile {
     position: relative;
     display: grid;
-    gap: 12px;
-    padding: 12px 14px 14px;
+    align-content: start;
+    gap: 11px;
+    padding: 7px 7px 13px;
     border-radius: var(--r-lg);
     border: 1px solid var(--line);
     background: var(--surface);
@@ -217,33 +279,131 @@
     background: var(--signal-soft);
     box-shadow: inset 0 0 0 1px var(--signal-line);
   }
-  .tile-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    min-height: 18px;
+  /* The picture, framed like a monitor with on-screen labels. */
+  .screen {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    border-radius: calc(var(--r-lg) - 7px);
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  .tile:hover .screen {
+    --portrait-ink: color-mix(in srgb, var(--lcd-text-2) 55%, var(--lcd-text));
+  }
+  .active .screen {
+    box-shadow: 0 0 0 1px var(--signal-line);
+  }
+  /* Keeps the on-screen labels readable over light pictures. */
+  .screen::after {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: 2;
+    height: 34%;
+    border-radius: inherit;
+    background: linear-gradient(rgb(0 0 0 / 0.55), transparent);
+    pointer-events: none;
+  }
+  .new .screen::after {
+    content: none;
   }
   .slot {
-    font-size: 12px;
-    color: var(--text-3);
+    position: absolute;
+    z-index: 3;
+    left: 9px;
+    top: 7px;
+    font-size: 11.5px;
+    color: var(--lcd-text-2);
     letter-spacing: 0.06em;
   }
   .active .slot {
     color: var(--signal);
   }
   .tag {
+    position: absolute;
+    z-index: 3;
+    right: 7px;
+    top: 6px;
     font-size: 9.5px;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     padding: 2px 6px;
     border-radius: 4px;
-    color: var(--text-2);
-    border: 1px solid var(--line-strong);
+    color: var(--lcd-text-2);
+    border: 1px solid color-mix(in srgb, var(--lcd-text-2) 50%, transparent);
   }
   .tag.on {
     background: var(--signal);
     border-color: var(--signal);
     color: var(--signal-ink);
+  }
+  .photo {
+    position: absolute;
+    z-index: 3;
+    right: 6px;
+    bottom: 6px;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 7px;
+    color: var(--lcd-text);
+    background: color-mix(in srgb, var(--lcd) 75%, transparent);
+    border: 1px solid color-mix(in srgb, var(--lcd-text-2) 45%, transparent);
+    opacity: 0;
+  }
+  .tile:hover .photo,
+  .photo:focus-visible,
+  .photo.open {
+    opacity: 1;
+  }
+  .photo:hover:not(:disabled),
+  .photo.open {
+    background: var(--lcd);
+    border-color: var(--lcd-text-2);
+    color: var(--signal);
+  }
+  .menu {
+    position: absolute;
+    z-index: 10;
+    right: 0;
+    top: calc(100% + 6px);
+    display: grid;
+    gap: 2px;
+    min-width: 170px;
+    padding: 4px;
+    border-radius: var(--r);
+    border: 1px solid var(--line-strong);
+    background: var(--surface-2);
+    box-shadow: var(--shadow);
+    cursor: default;
+  }
+  .menu button {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    font-size: 13px;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .menu button:hover:not(:disabled) {
+    background: var(--surface-3);
+  }
+  .menu :global(svg) {
+    color: var(--text-3);
+  }
+  .picker {
+    display: none;
+  }
+  .tile-foot {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+    padding: 0 7px;
   }
   .name {
     font-weight: 600;
@@ -277,20 +437,21 @@
   .new {
     border-style: dashed;
     background: transparent;
-    align-content: center;
-    justify-items: start;
-    gap: 4px;
-    min-height: 132px;
   }
-  .plus {
-    width: 30px;
-    height: 30px;
+  .new .screen {
     display: grid;
     place-items: center;
-    border-radius: 8px;
+    box-shadow: none;
+    border: 1px dashed var(--line-strong);
+  }
+  .plus {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 9px;
     color: var(--signal);
     border: 1px solid var(--signal-line);
-    margin-bottom: 8px;
   }
   .empty {
     color: var(--text-2);

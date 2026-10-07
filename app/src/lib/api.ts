@@ -1,7 +1,9 @@
 // Bridge to the Rust backend. Outside Tauri (plain browser) a mock backend is used so the UI
 // can be previewed and tested without audio hardware or models.
 
-export type Variant = "120ms" | "40ms";
+export type Variant = "120ms" | "40ms" | "ultra";
+
+export type Effect = "none" | "robot" | "radio" | "demon" | "chipmunk" | "echo" | "cave";
 
 export interface Settings {
   input: string | null;
@@ -16,6 +18,13 @@ export interface Settings {
   output_gain: number;
   hotkey: string;
   theme: string;
+  /** Noise suppression on the microphone. */
+  denoise: boolean;
+  effect: Effect;
+  /** Pitch shift in semitones. */
+  pitch: number;
+  /** Ctrl+Alt+1..9 pick a voice from any app. */
+  voice_hotkeys: boolean;
 }
 
 export interface Device {
@@ -34,6 +43,10 @@ export interface VoiceInfo {
   builtin: boolean;
   /** 32 values in [0, 1] summarizing the speaker embedding (the voice's "fingerprint"). */
   print: number[];
+  /** The voice's picture as a data: URL: the user's own, or the illustration of a built-in voice. */
+  portrait: string | null;
+  /** The picture is the user's own, so it can be removed. */
+  custom_portrait: boolean;
 }
 
 export interface LiveInfo {
@@ -105,10 +118,15 @@ export interface Api {
   cloneFromFile(path: string, name: string, description: string): Promise<VoiceInfo>;
   recordAndClone(seconds: number, name: string, description: string): Promise<VoiceInfo>;
   deleteVoice(id: string): Promise<void>;
+  /** dataUrl: a small square image (see portrait.ts), saved as the voice's own picture. */
+  setVoicePortrait(id: string, dataUrl: string): Promise<void>;
+  clearVoicePortrait(id: string): Promise<void>;
   downloadModels(onProgress: (p: DownloadProgress) => void): Promise<void>;
   pickAudioFile(): Promise<string | null>;
   openUrl(url: string): Promise<void>;
   onEnabledChanged(cb: (enabled: boolean) => void): Promise<() => void>;
+  /** A global voice hotkey switched the voice. */
+  onVoiceChanged(cb: (id: string) => void): Promise<() => void>;
 }
 
 const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -129,6 +147,8 @@ async function tauriApi(): Promise<Api> {
     cloneFromFile: (path, name, description) => invoke("clone_voice_file", { path, name, description }),
     recordAndClone: (seconds, name, description) => invoke("record_and_clone", { seconds, name, description }),
     deleteVoice: (id) => invoke("delete_voice", { id }),
+    setVoicePortrait: (id, dataUrl) => invoke("set_voice_portrait", { id, dataUrl }),
+    clearVoicePortrait: (id) => invoke("clear_voice_portrait", { id }),
     async downloadModels(onProgress) {
       const unlisten = await listen<DownloadProgress>("download-progress", (e) => onProgress(e.payload));
       try {
@@ -146,6 +166,7 @@ async function tauriApi(): Promise<Api> {
     },
     openUrl: (url) => opener.openUrl(url),
     onEnabledChanged: (cb) => listen<boolean>("enabled-changed", (e) => cb(e.payload)),
+    onVoiceChanged: (cb) => listen<string>("voice-changed", (e) => cb(e.payload)),
   };
 }
 
