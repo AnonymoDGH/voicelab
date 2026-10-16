@@ -25,6 +25,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy -p voicelab-core -p voicelab-cli --all-targets -- -D warnings
+      # Configuración de Android (Kairo): sin audio de escritorio ni descargas, ORT cargado en ejecución.
+      - run: cargo clippy -p voicelab-core --no-default-features --features load-dynamic --all-targets -- -D warnings
       # Pipeline/model tests skip without VOICELAB_MODELS; DSP and real-time logic tests always run.
       - run: cargo test -p voicelab-core
 
