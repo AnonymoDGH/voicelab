@@ -15,11 +15,22 @@ hound.workspace = true
 symphonia.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-cpal.workspace = true
-rtrb.workspace = true
-dirs.workspace = true
-ureq.workspace = true
+cpal = { workspace = true, optional = true }
+rtrb = { workspace = true, optional = true }
+dirs = { workspace = true, optional = true }
+ureq = { workspace = true, optional = true }
 sha2.workspace = true
 rand.workspace = true
 rand_distr.workspace = true
 nnnoiseless.workspace = true
+
+[features]
+default = ["live", "download", "ort-download"]
+# Audio en vivo de escritorio (captura/reproducción con cpal).
+live = ["dep:cpal", "dep:rtrb"]
+# Descarga de modelos y rutas de datos del usuario.
+download = ["dep:ureq", "dep:dirs"]
+# Binarios precompilados de ONNX Runtime (escritorio).
+ort-download = ["ort/download-binaries", "ort/copy-dylibs", "ort/tls-native"]
+# Carga `libonnxruntime` en tiempo de ejecución (Android y otros sin binarios precompilados).
+load-dynamic = ["ort/load-dynamic"]

@@ -10,7 +10,7 @@ repository = "https://github.com/AnonymoDGH/voicelab"
 
 [workspace.dependencies]
 anyhow = "1"
-ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "download-binaries", "copy-dylibs", "tls-native"] }
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std"] }
 realfft = "3.5"
 rubato = "5"
 audioadapter-buffers = "5.2"

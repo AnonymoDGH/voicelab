@@ -4,6 +4,7 @@ pub mod audio;
 pub mod audio_file;
 pub mod dsp;
 pub mod engine;
+#[cfg(feature = "download")]
 pub mod paths;
 pub mod voice;
 
